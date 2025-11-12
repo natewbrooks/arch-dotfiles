@@ -1,0 +1,54 @@
+@define-color purple #30004A;
+@define-color light #dfdab7;
+@define-color light-purple #b084eb;
+
+/* window {
+margin: 5px;
+border: 2px solid red;
+background-color: red;
+} */
+
+* {
+  font-family: FantasqueSansMono, "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif;
+  font-weight: 900; /* needed for FA6 solid icons */
+  font-size: 16px;
+}
+
+#input {
+margin: 5px;
+border: 2px solid @purple;
+background-color: @purple;
+}
+
+#inner-box {
+/* border: 1px solid @light-purple; */
+background-color: @purple;
+}
+
+#outer-box {
+border: 2px solid @light-purple;
+background-color: @purple;
+}
+
+#entry:selected {
+background-color: rgba(0,0,0,0);
+} 
+
+#text:selected {
+background-color: @light-purple;
+padding: 4px;
+color: @purple;
+} 
+
+/* #scroll {
+margin: 5px;
+border: 2px solid orange;
+background-color: orange;
+} */
+
+#text {
+margin: 5px;
+color: @light;
+/* border: 2px solid cyan; */
+/* background-color: cyan; */
+}
