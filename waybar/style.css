@@ -1,5 +1,7 @@
 @define-color light #dfdab7;
 @define-color purple #30004A;
+@define-color light-purple #b084eb;
+@define-color black #161320;
 
 /* * {
     font-family: FontAwesome, FantasqueSansMono, sans-serif;
@@ -8,7 +10,7 @@
 
 * {
   font-family: FantasqueSansMono, "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif;
-  font-weight: 900; /* needed for FA6 solid icons */
+  font-weight: 900; 
   font-size: 14px;
 }
 
@@ -128,6 +130,34 @@ button:hover {
 #pulseaudio:hover {
     background-color: rgba(0,0,0,0.2);
 }
+
+/* Calendar popup styling */
+tooltip {
+	background: @black;
+}
+
+tooltip label {
+    color: @light;
+}
+
+/* Target the embedded calendar table */
+tooltip .calendar {
+  background: @black;
+  color: @light;
+}
+
+/* Highlight current day */
+tooltip .calendar:selected {
+  background: #89b4fa;
+  color: @black;
+}
+
+/* Weekday header row */
+tooltip .calendar.header {
+  color: #f38ba8;
+  font-weight: bold;
+}
+
 
 #custom-power {
     font-size: 12px;

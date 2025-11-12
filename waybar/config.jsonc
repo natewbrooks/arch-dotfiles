@@ -18,8 +18,9 @@
     "modules-right": [
         //"mpd",
         //"idle_inhibitor",
-        "network",
+        // "network",
         "pulseaudio",
+        // "pulseaudio/slider",
         //"power-profiles-daemon",
         //"cpu",
         //"memory",
@@ -108,13 +109,33 @@
         "icons": {
          "blueman": "bluetooth",
          "TelegramDesktop": "$HOME/.local/share/icons/hicolor/16x16/apps/telegram.png"
+        }
     },
     "clock": {
         "timezone": "America/New_York",
-	    "tooltip-format": "<big>{:%Y %B}</big>\n<tt><big>{calendar}</big></tt>",
-        "format-alt": "{:%Y-%m-%d}",
+	    "tooltip-format": "<tt><big>{calendar}</big></tt>",
+        "format-alt": "{:%m/%d/%Y}",
         "format": "{:%I:%M %p}",
-    }
+        "calendar": {
+            "mode"          : "month",
+            "mode-mon-col"  : 3,
+            "weeks-pos"     : "left",
+            "on-scroll"     : 1,
+            "format": {
+                "months":     "<span color='#dfdab7'>{}</span>",
+                "days":       "<span color='#b084eb'>{}</span>",
+                "weeks":      "<span color='#e99c29'>W{}</span>",
+                "weekdays":   "<span color='#e99c29'>{}</span>",
+                "today":      "<span color='#eddfffff'><b><u>{}</u></b></span>"
+            }
+        },
+        "actions":  {
+            "on-click-right": "mode",
+            "on-scroll-up": "tz_up",
+            "on-scroll-down": "tz_down",
+            "on-scroll-up": "shift_up",
+            "on-scroll-down": "shift_down"
+        }
     },
     "cpu": {
         "format": "{usage}% ",
@@ -147,6 +168,8 @@
         "format-charging": "{capacity}% ",
         "format-plugged": "{capacity}% ",
         "format-alt": "{time} {icon}",
+        "format-time": "{H}hr {m}min",
+        "interval": 30,
         // "format-good": "", // An empty format will hide the module
         // "format-full": "",
         "format-icons": ["", "", "", "", ""]
@@ -172,7 +195,8 @@
         "tooltip-format": "{ifname} via {gwaddr} ",
         "format-linked": "{ifname} (No IP) ",
         "format-disconnected": "Disconnected ⚠",
-        "format-alt": "{ifname}: {ipaddr}/{cidr}"
+        "format-alt": "{ifname}: {ipaddr}/{cidr}",
+        // "on-click": ""
     },
     "pulseaudio": {
         // "scroll-step": 1, // %, can be a float
@@ -192,6 +216,11 @@
             "default": ["", "", ""]
         },
         "on-click": "pavucontrol"
+    },
+    "pulseaudio/slider": {
+        "min": 0,
+        "max": 100,
+        "orientation": "horizontal"
     },
     "custom/media": {
         "format": "{icon} {text}",
