@@ -1,11 +1,17 @@
 @define-color light #dfdab7;
 @define-color purple #30004A;
 
-* {
-    /* `otf-font-awesome` is required to be installed for icons */
+/* * {
     font-family: FontAwesome, FantasqueSansMono, sans-serif;
     font-size: 14px;
+} */
+
+* {
+  font-family: FantasqueSansMono, "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif;
+  font-weight: 900; /* needed for FA6 solid icons */
+  font-size: 14px;
 }
+
 
 window#waybar {
     background-color: @purple;
@@ -36,6 +42,19 @@ window#waybar.termite {
 window#waybar.chromium {
     background-color: #000000;
     border: none;
+}
+
+menu {
+	background: #161320;
+	color: @light;
+}
+
+menuitem {
+
+}
+
+menuitem:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 button {
