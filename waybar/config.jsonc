@@ -119,7 +119,7 @@
         "calendar": {
             "mode"          : "month",
             "mode-mon-col"  : 3,
-            "weeks-pos"     : "left",
+            "weeks-pos"     : "right",
             "on-scroll"     : 1,
             "format": {
                 "months":     "<span color='#dfdab7'>{}</span>",
