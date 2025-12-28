@@ -102,8 +102,8 @@ nautilus
 neatvnc
 neovim
 netflix
-network-manager-applet
 networkmanager
+network-manager-applet
 networkmanager-openvpn
 nodejs
 npm
@@ -111,8 +111,8 @@ nss-mdns
 nvidia-dkms
 nvidia-utils
 nvm
-obs-studio
 obsidian
+obs-studio
 ocrmypdf
 onedrive-abraunegg
 openssh

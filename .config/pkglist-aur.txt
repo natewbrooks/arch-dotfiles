@@ -6,10 +6,10 @@ aseprite-debug
 choco-fontviewer
 choco-fontviewer-debug
 downgrade
-electron-castlab-bin
-electron-castlab-bin-debug
 electron39-bin
 electron39-bin-debug
+electron-castlab-bin
+electron-castlab-bin-debug
 emoji-keyboard-bin
 emoji-keyboard-bin-debug
 figma-linux-bin
@@ -40,9 +40,9 @@ onedrive-abraunegg-debug
 phonon-qt6-mpv
 phonon-qt6-mpv-debug
 postman-bin
+python310
 python-imageio-ffmpeg
 python-screeninfo
-python310
 qt5-webchannel
 qt5-webchannel-debug
 slack-desktop

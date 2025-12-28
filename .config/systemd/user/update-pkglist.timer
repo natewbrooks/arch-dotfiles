@@ -3,7 +3,7 @@ Description=Auto-update package lists
 
 [Timer]
 OnBootSec=2m
-OnUnitActiveSec=6h
+OnUnitActiveSec=1h
 Persistent=true
 
 [Install]
