@@ -20,11 +20,12 @@
         //"idle_inhibitor",
         // "network",
         "pulseaudio",
-        // "pulseaudio/slider",
+        "bluetooth",
+        //"pulseaudio/slider",
         //"power-profiles-daemon",
         //"cpu",
         //"memory",
-        //"temperature",
+        // "temperature",
         //"backlight",
         //"keyboard-state",
         //"sway/language",
@@ -198,11 +199,17 @@
         "format-alt": "{ifname}: {ipaddr}/{cidr}",
         // "on-click": ""
     },
+    "bluetooth": {
+        "format-connected": " {device_alias}",
+        "format-on": " BT On",
+        "format-off": "󰂯 BT Off",
+        "on-click": "blueman-manager"
+    },
     "pulseaudio": {
         // "scroll-step": 1, // %, can be a float
         "format": "{volume}% {icon} {format_source}",
-        "format-bluetooth": "{volume}% {icon} {format_source}",
-        "format-bluetooth-muted": " {icon} {format_source}",
+        "format-bluetooth": "{volume}% {icon}  {format_source}",
+        "format-bluetooth-muted": " {icon}  {format_source}",
         "format-muted": " {format_source}",
         "format-source": "{volume}% ",
         "format-source-muted": "",
