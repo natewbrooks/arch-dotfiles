@@ -1,0 +1,6 @@
+[Unit]
+Description=Update pacman and AUR package lists
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/update-pkglist.sh
