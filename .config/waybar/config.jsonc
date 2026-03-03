@@ -4,7 +4,7 @@
     // "position": "bottom", // Waybar position (top|bottom|left|right)
     "height": 24, // Waybar height (to be removed for auto height)
     // "width": 1280, // Waybar width
-    "spacing": 4, // Gaps between modules (4px)
+    "spacing": 8, // Gaps between modules (4px)
     // Choose the order of the modules
     "modules-left": [
         "hyprland/workspaces",
@@ -29,6 +29,7 @@
         //"backlight",
         //"keyboard-state",
         //"sway/language",
+        "custom/gamma",
         "battery",
         //"battery#bat2",
         "clock",
@@ -200,9 +201,9 @@
         // "on-click": ""
     },
     "bluetooth": {
-        "format-connected": " {device_alias}",
-        "format-on": " BT On",
-        "format-off": "󰂯 BT Off",
+        "format-connected": " {device_alias} ",
+        "format-on": " ",
+        "format-off": "",
         "on-click": "blueman-manager"
     },
     "pulseaudio": {
@@ -247,10 +248,17 @@
 		"menu": "on-click",
 		"menu-file": "$HOME/.config/waybar/power_menu.xml", // Menu file in resources folder
 		"menu-actions": {
-			"shutdown": "shutdown",
+            "logout": "hyprctl dispatch exit",
+			"shutdown": "shutdown now",
 			"reboot": "reboot",
 			"suspend": "systemctl suspend",
 			"hibernate": "systemctl hibernate"
 		}
+    },
+    "custom/gamma": {
+       "exec": "~/.local/bin/gamma-status",
+       "interval": 1,
+       "format": "{}% ",
+       "tooltip-format": "{}% brightness"
     }
 }
