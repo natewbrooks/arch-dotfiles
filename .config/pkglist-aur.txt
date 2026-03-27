@@ -43,5 +43,7 @@ units
 vesktop-bin
 visual-studio-code-bin
 waypaper
+wl-screenrec
+wl-screenrec-debug
 yay
 zen-browser-bin
