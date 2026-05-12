@@ -10,7 +10,7 @@
 
 * {
   font-family: FantasqueSansMono, "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif;
-  font-weight: 900; 
+  font-weight: 900;
   font-size: 14px;
 }
 
@@ -119,6 +119,11 @@ button:hover {
 #wireplumber,
 #custom-media,
 #custom-power,
+#custom-gamma,
+#custom-cava,
+#custom-sysinfo,
+#custom-lighting,
+#custom-notifications,
 #tray,
 #mode,
 #idle_inhibitor,
@@ -143,6 +148,7 @@ tooltip {
 
 tooltip label {
     color: @light;
+    font-family: "FantasqueSansMono", monospace;
 }
 
 /* Target the embedded calendar table */
@@ -217,22 +223,41 @@ tooltip .calendar.header {
 }
 
 #power-profiles-daemon {
-    padding-right: 15px;
-}
-
-#power-profiles-daemon.performance {
-    background-color: #f53c3c;
+    padding: 0 4px;
     color: @light;
 }
 
-#power-profiles-daemon.balanced {
-    background-color: #2980b9;
-    color: @light;
-}
-
+#power-profiles-daemon.performance,
+#power-profiles-daemon.balanced,
 #power-profiles-daemon.power-saver {
-    background-color: #2ecc71;
-    color: #000000;
+    background-color: transparent;
+    color: @light;
+}
+
+#custom-notifications {
+    min-width: 26px;
+    padding: 0 6px;
+}
+
+/* Group separators: faint vertical bar on the first module of each group. */
+#custom-lighting,
+#clock {
+    border-left: 1px solid rgba(223, 218, 183, 0.25);
+    padding-left: 12px;
+    margin-left: 8px;
+}
+
+/* Bar after workspace numbers on the left */
+#workspaces {
+    border-right: 1px solid rgba(223, 218, 183, 0.25);
+    padding-right: 12px;
+    margin-right: 8px;
+}
+
+#bluetooth.off,
+#bluetooth.no-controller,
+#bluetooth.disabled {
+    color: rgba(223, 218, 183, 0.4);
 }
 
 label:focus {
@@ -255,7 +280,7 @@ label:focus {
 #backlight {
     background-color: #90b1b1;
 }
-/* 
+/*
 #network {
     background-color: #2980b9;
 }
@@ -295,6 +320,11 @@ label:focus {
 
 #custom-media.custom-vlc {
     background-color: #ffa000;
+}
+
+#custom-cava {
+    color: @light-purple;
+    min-width: 110px;
 }
 
 #temperature {

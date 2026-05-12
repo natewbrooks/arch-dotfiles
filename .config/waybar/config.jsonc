@@ -4,34 +4,25 @@
     // "position": "bottom", // Waybar position (top|bottom|left|right)
     "height": 24, // Waybar height (to be removed for auto height)
     // "width": 1280, // Waybar width
-    "spacing": 8, // Gaps between modules (4px)
+    "spacing": 3, // Gaps between modules (4px)
     // Choose the order of the modules
     "modules-left": [
         "hyprland/workspaces",
         "hyprland/mode",
         "hyprland/scratchpad",
-        "custom/media"
-    ],
-    "modules-center": [
+        "custom/media",
         "hyprland/window"
     ],
+    "modules-center": [],
     "modules-right": [
-        //"mpd",
-        //"idle_inhibitor",
-        // "network",
+        "custom/cava",
         "pulseaudio",
         "bluetooth",
-        //"pulseaudio/slider",
-        //"power-profiles-daemon",
-        //"cpu",
-        //"memory",
-        // "temperature",
-        //"backlight",
-        //"keyboard-state",
-        //"sway/language",
-        "custom/gamma",
+        "custom/lighting",
         "battery",
-        //"battery#bat2",
+        "custom/notifications",
+        "power-profiles-daemon",
+        "custom/sysinfo",
         "clock",
         "tray",
         "custom/power"
@@ -62,7 +53,44 @@
             "unlocked": ""
         }
     },
-    "hyprland/mode": {
+        "custom/cava": {
+        "exec": "$HOME/.config/waybar/cava.sh",
+        "format": "{}",
+        "tooltip": false
+    },
+    "custom/sysinfo": {
+        "exec": "$HOME/.config/waybar/sysinfo.sh",
+        "interval": 3,
+        "return-type": "json",
+        "format": " {}",
+        "on-click": "kitty -e htop"
+    },
+    "custom/lighting": {
+        "exec": "$HOME/.config/waybar/lighting.sh",
+        "interval": 1,
+        "return-type": "json",
+        "format": "{}"
+    },
+    "custom/notifications": {
+        "exec": "swaync-client -swb 2>/dev/null",
+        "return-type": "json",
+        "format": "{icon}",
+        "format-icons": {
+            "notification":               " <span foreground='#f53c3c'>•</span>",
+            "none":                       "",
+            "dnd-notification":           " <span foreground='#f53c3c'>•</span>",
+            "dnd-none":                   "",
+            "inhibited-notification":     " <span foreground='#f53c3c'>•</span>",
+            "inhibited-none":             "",
+            "dnd-inhibited-notification": " <span foreground='#f53c3c'>•</span>",
+            "dnd-inhibited-none":         ""
+        },
+        "tooltip-format": "Notifications",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw",
+        "escape": true
+    },
+"hyprland/mode": {
         "format": "<span style=\"italic\">{}</span>"
     },
     "hyprland/scratchpad": {
@@ -209,9 +237,9 @@
     "pulseaudio": {
         // "scroll-step": 1, // %, can be a float
         "format": "{volume}% {icon} {format_source}",
-        "format-bluetooth": "{volume}% {icon}  {format_source}",
-        "format-bluetooth-muted": " {icon}  {format_source}",
-        "format-muted": " {format_source}",
+        "format-bluetooth": "{volume}% {icon} {format_source}",
+        "format-bluetooth-muted": " {icon}",
+        "format-muted": "",
         "format-source": "{volume}% ",
         "format-source-muted": "",
         "format-icons": {
