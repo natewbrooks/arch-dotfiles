@@ -12,14 +12,21 @@ home = os.path.expanduser('~')
 waybar = f'{home}/.config/waybar'
 
 
-def peer_name():
-    """Paired computer's name (VOID/VORTEX) from KDE Connect's config file."""
+def peer():
+    """Paired computer's name (VOID/VORTEX) and icon.
+
+    KDE Connect reports the laptop as a desktop too, so the icon comes from this machine instead:
+    if this one has a battery it is the laptop and the peer is the desktop, and vice versa.
+    """
+    # ponytail: assumes exactly one laptop + one desktop; read the peer's real type if a third machine joins.
+    import glob
+    icon = '\uf108' if glob.glob('/sys/class/power_supply/BAT*') else '\uf109'
     cfg = configparser.ConfigParser(interpolation=None, strict=False)
     cfg.read(f'{home}/.config/kdeconnect/trusted_devices')
     for section in cfg.sections():
         if cfg[section].get('type') in ('desktop', 'laptop'):
-            return cfg[section].get('name', 'computer').upper()
-    return 'COMPUTER'
+            return cfg[section].get('name', 'computer').upper(), icon
+    return 'COMPUTER', icon
 
 
 def rows(menu):
@@ -34,7 +41,8 @@ def shift(child, by):
 
 
 record = ET.parse(f'{waybar}/record_menu.xml')
-share = ET.fromstring(open(f'{waybar}/share_menu.xml').read().replace('@PEER@', peer_name()))
+name, icon = peer()
+share = ET.fromstring(open(f'{waybar}/share_menu.xml').read().replace('@PEER_ICON@', icon).replace('@PEER@', name))
 menu = record.getroot().find('object')
 record_children = menu.findall('child')
 for child in record_children:

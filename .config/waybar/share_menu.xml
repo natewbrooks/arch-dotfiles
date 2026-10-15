@@ -42,7 +42,7 @@
     </child>
     <child>
       <object class="GtkMenuItem" id="hdr_pc">
-        <property name="label">  @PEER@</property>
+        <property name="label">@PEER_ICON@  @PEER@</property>
         <property name="sensitive">false</property>
         <style><class name="header"/><class name="pc"/></style>
       </object>
