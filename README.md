@@ -28,3 +28,5 @@ git clone <repo-url> ~
 monitor = , preferred, auto, 1
 exec-once = waybar
 ```
+
+Package lists are per host (`.config/pkglist-{pacman,aur}-<hostname>.txt`), refreshed by `update-pkglist.timer`. Restore with `sudo pacman -S --needed - < ~/.config/pkglist-pacman-$(uname -n).txt`.

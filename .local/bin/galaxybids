@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
-# Launch galaxybids workspace setup: Zen on ws1, VSCode on ws2, Slack on ws7
+# Launch galaxybids setup on the current workspace: Zen tabs, VSCode (split terminals auto-run dev servers), Slack.
+
+ws=$(hyprctl activeworkspace -j | jq -r .id)
 
 ZEN_URLS="https://github.com/orgs/GoPandaDev/projects/5/views/1"
-if ! pgrep -x zen-bin >/dev/null && ! pgrep -f 'zen-browser' >/dev/null; then
+if pgrep -x zen-bin >/dev/null; then
+  # Zen already open: URLs become tabs in the existing window, wherever it is.
+  zen-browser $ZEN_URLS >/dev/null 2>&1 &
+else
   ZEN_URLS="$ZEN_URLS https://github.com/GoPandaDev/galaxy-bids-server/actions https://github.com/GoPandaDev/galaxy-bids-client/actions https://github.com/GoPandaDev/galaxy-bids-mobile/actions"
+  hyprctl dispatch exec "[workspace $ws silent] zen-browser $ZEN_URLS"
 fi
-hyprctl dispatch exec "[workspace 1 silent] zen-browser $ZEN_URLS"
-hyprctl dispatch exec "[workspace 2 silent] code -n $HOME/dev/gopanda/galaxy-bids/galaxy-bids.code-workspace"
-hyprctl dispatch exec "[workspace 7 silent] slack"
+hyprctl dispatch exec "[workspace $ws silent] code -n $HOME/dev/gopanda/galaxy-bids/galaxy-bids.code-workspace"
+hyprctl dispatch exec "[workspace $ws silent] slack"
 
 # Slack is slow to spawn; the exec rule may expire. Poll and move it.
 (
   for _ in {1..60}; do
     if hyprctl clients -j | grep -q '"class": "Slack"'; then
-      hyprctl dispatch movetoworkspacesilent "7,class:Slack"
+      hyprctl dispatch movetoworkspacesilent "$ws,class:Slack"
       break
     fi
     sleep 1
   done
 ) &
-
-hyprctl dispatch workspace 2

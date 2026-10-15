@@ -8,8 +8,8 @@ AUR_TMP="$(mktemp)"
 pacman -Qqe | sort > "$PAC_TMP"
 pacman -Qqm | sort > "$AUR_TMP"
 
-PAC_OUT="$OUT_DIR/pkglist-pacman.txt"
-AUR_OUT="$OUT_DIR/pkglist-aur.txt"
+PAC_OUT="$OUT_DIR/pkglist-pacman-$(uname -n).txt"
+AUR_OUT="$OUT_DIR/pkglist-aur-$(uname -n).txt"
 
 if ! cmp -s "$PAC_TMP" "$PAC_OUT"; then
   mv "$PAC_TMP" "$PAC_OUT"
