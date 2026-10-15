@@ -4,12 +4,12 @@
 @define-color black #161320;
 
 /* * {
-    font-family: FontAwesome, FantasqueSansMono, sans-serif;
+    font-family: FantasqueSansMono, "Font Awesome 7 Free Solid", "Font Awesome 7 Brands", sans-serif;
     font-size: 14px;
 } */
 
 * {
-  font-family: FantasqueSansMono, "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif;
+  font-family: FantasqueSansMono, "Font Awesome 7 Free Solid", "Font Awesome 7 Brands", sans-serif;
   font-weight: 900;
   font-size: 14px;
 }
@@ -120,8 +120,15 @@ button:hover {
 #custom-media,
 #custom-power,
 #custom-gamma,
+#custom-claude,
 #custom-cava,
+#custom-kdeconnect,
 #custom-sysinfo,
+#custom-vpn,
+#custom-record,
+#custom-record-pause,
+#custom-record-stop,
+#custom-ledger,
 #custom-lighting,
 #custom-notifications,
 #tray,
@@ -223,7 +230,6 @@ tooltip .calendar.header {
 }
 
 #power-profiles-daemon {
-    padding: 0 4px;
     color: @light;
 }
 
@@ -234,13 +240,9 @@ tooltip .calendar.header {
     color: @light;
 }
 
-#custom-notifications {
-    min-width: 26px;
-    padding: 0 6px;
-}
-
 /* Group separators: faint vertical bar on the first module of each group. */
 #custom-lighting,
+#custom-notifications,
 #clock {
     border-left: 1px solid rgba(223, 218, 183, 0.25);
     padding-left: 12px;
@@ -406,6 +408,22 @@ label:focus {
 	background-color: transparent;
 }
 
+#custom-pomodoro.pomo-work {
+    color: #ff7a7a;
+}
+
+#custom-pomodoro.pomo-break {
+    color: #7ad6ff;
+}
+
+#custom-pomodoro.pomo-paused {
+    color: rgba(223, 218, 183, 0.5);
+}
+
+#custom-pomodoro.pomo-idle {
+    color: rgba(223, 218, 183, 0.6);
+}
+
 #privacy {
     padding: 0;
 }
@@ -425,4 +443,92 @@ label:focus {
 
 #privacy-item.audio-out {
     background-color: #0069d4;
+}
+
+#custom-ledger.running {
+    color: #4ade80;
+}
+#custom-ledger.paused,
+#custom-ledger.idle {
+    color: #808080;
+}
+
+#custom-record.recording,
+#custom-record-stop.recording,
+#custom-record-pause.recording {
+    color: #f53c3c;
+}
+#custom-record.paused,
+#custom-record-stop.paused,
+#custom-record-pause.paused {
+    color: #e99c29;
+}
+#custom-record-pause,
+#custom-record-stop {
+    padding: 0 3px;
+    font-size: 11px;
+}
+
+/* Record dropdown: 2-column grid of buttons with headers */
+menuitem.header {
+    padding: 4px 12px;
+}
+menuitem.header.video:disabled label {
+    color: #f53c3c;
+}
+menuitem.header.gif:disabled label {
+    color: #4ade80;
+}
+menuitem.last {
+    font-size: 11px;
+    padding: 4px 12px;
+    color: rgba(223, 218, 183, 0.7);
+}
+menuitem.last:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+menuitem.clip {
+    padding-left: 24px;
+}
+menuitem.clip check {
+    min-width: 10px;
+    min-height: 10px;
+    margin: 0;
+}
+menuitem.clip label {
+    margin-left: 8px;
+}
+menuitem.cell {
+    margin: 2px;
+    padding: 4px 12px;
+    border-radius: 4px;
+}
+menuitem.cell:hover {
+    background: @light;
+    color: @purple;
+}
+
+#custom-claude.running {
+    color: @light-purple;
+    animation: breathe 1s steps(12) infinite alternate;
+}
+#custom-claude.ready {
+    color: #4ade80;
+}
+#custom-claude.waiting {
+    color: #f0932b;
+}
+#custom-claude.idle {
+    color: #808080;
+}
+@keyframes breathe {
+    to { opacity: 0.2; }
+}
+
+#custom-vpn.on {
+    color: @light-purple;
+}
+
+#custom-vpn.off {
+    color: rgba(223, 218, 183, 0.4);
 }

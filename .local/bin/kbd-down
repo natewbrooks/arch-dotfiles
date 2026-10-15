@@ -1,0 +1,10 @@
+#!/bin/bash
+
+KBD="/sys/class/leds/asus::kbd_backlight/brightness"
+cur=$(cat "$KBD")
+
+if [ "$cur" -gt 1 ]; then
+  echo $((cur - 1)) | tee "$KBD" >/dev/null
+else
+  echo 0 | tee "$KBD" >/dev/null
+fi

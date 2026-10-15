@@ -1,0 +1,11 @@
+#!/bin/bash
+
+STATE="$HOME/.cache/gamma.value"
+
+[ -f "$STATE" ] || echo "1.0" > "$STATE"
+
+gamma=$(cat "$STATE")
+
+percent=$(awk -v g="$gamma" 'BEGIN { printf "%.0f", g * 100 }')
+
+echo "$percent"

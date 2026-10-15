@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Launch galaxybids workspace setup: Zen on ws1, VSCode on ws2, Slack on ws7
+
+ZEN_URLS="https://github.com/orgs/GoPandaDev/projects/5/views/1"
+if ! pgrep -x zen-bin >/dev/null && ! pgrep -f 'zen-browser' >/dev/null; then
+  ZEN_URLS="$ZEN_URLS https://github.com/GoPandaDev/galaxy-bids-server/actions https://github.com/GoPandaDev/galaxy-bids-client/actions https://github.com/GoPandaDev/galaxy-bids-mobile/actions"
+fi
+hyprctl dispatch exec "[workspace 1 silent] zen-browser $ZEN_URLS"
+hyprctl dispatch exec "[workspace 2 silent] code -n $HOME/dev/gopanda/galaxy-bids/galaxy-bids.code-workspace"
+hyprctl dispatch exec "[workspace 7 silent] slack"
+
+# Slack is slow to spawn; the exec rule may expire. Poll and move it.
+(
+  for _ in {1..60}; do
+    if hyprctl clients -j | grep -q '"class": "Slack"'; then
+      hyprctl dispatch movetoworkspacesilent "7,class:Slack"
+      break
+    fi
+    sleep 1
+  done
+) &
+
+hyprctl dispatch workspace 2

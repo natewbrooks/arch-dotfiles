@@ -1,0 +1,26 @@
+#!/bin/bash
+
+STATE="$HOME/.cache/gamma.value"
+MIN=0.1
+MAX=1.0
+STEP=0.1
+
+[ -f "$STATE" ] || echo "1.0" > "$STATE"
+current=$(cat "$STATE")
+
+case "$1" in
+  up)
+    next=$(awk -v c="$current" -v s="$STEP" -v m="$MAX" 'BEGIN { v=c+s; if (v>m) v=m; printf "%.1f", v }')
+    ;;
+  down)
+    next=$(awk -v c="$current" -v s="$STEP" -v m="$MIN" 'BEGIN { v=c-s; if (v<m) v=m; printf "%.1f", v }')
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+
+echo "$next" > "$STATE"
+
+pkill -x gammastep 2>/dev/null
+gammastep -P -O 6500 -b "$next" >/dev/null 2>&1 &
