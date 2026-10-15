@@ -2,6 +2,14 @@
 <interface>
   <object class="GtkMenu" id="menu">
   <child>
+      <object class="GtkMenuItem" id="sysmon">
+			<property name="label">System monitor</property>
+        </object>
+	</child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="delimiter0"/>
+    </child>
+  <child>
       <object class="GtkMenuItem" id="logout">
 			<property name="label">Logout</property>
         </object>
@@ -12,7 +20,7 @@
         </object>
 	</child>
 	<child>
-        <object class="GtkMenuItem" id="hibernat">
+        <object class="GtkMenuItem" id="hibernate">
 			<property name="label">Hibernate</property>
         </object>
 	</child>

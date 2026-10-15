@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Google Messages for waybar: toggle the floating window, or print the unread badge JSON.
+# Usage: messages [toggle|count|watch]
+# Unread count = phone "Messages" notifications mirrored by KDE Connect.
+
+CLASS='^chrome-messages\.google\.com'
+
+case ${1:-toggle} in
+count)
+  # Badge widget text: unread count (capped 999), empty when zero so waybar hides it.
+  n=0
+  for id in $(kdeconnect-cli -a --id-only 2>/dev/null); do
+    p=/modules/kdeconnect/devices/$id/notifications
+    for k in $(busctl --user call org.kde.kdeconnect "$p" org.kde.kdeconnect.device.notifications activeNotifications 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"'); do
+      busctl --user get-property org.kde.kdeconnect "$p/$k" org.kde.kdeconnect.device.notifications.notification appName 2>/dev/null \
+        | grep -q '"Messages"' && n=$((n + 1))
+    done
+  done
+  [ "$n" -gt 999 ] && n=999
+  if [ "$n" -gt 0 ]; then t=$n; else t=''; fi
+  jq -nc --arg t "$t" --arg n "$n" '{text: $t, tooltip: "Messages: \($n) unread", class: (if $t == "" then "empty" else "unread" end)}'
+  ;;
+watch)
+  # Badge stream for waybar.
+  while true; do "$0" count; sleep 10; done
+  ;;
+toggle)
+  # Normal floating window on the current workspace (clicks behind it still work).
+  # Hidden = parked on special:messages, which is never shown.
+  win() { hyprctl clients -j | jq -r --arg c "$CLASS" 'first(.[] | select(.class | test($c)) | "\(.address) \(.workspace.name)") // empty'; }
+  cur=$(hyprctl activeworkspace -j | jq -r .name)
+  read -r a ws <<<"$(win)"
+  if [ -z "$a" ]; then
+    # Exec rules match by PID, so the window maps floating from its first frame.
+    hyprctl dispatch exec "[float on; size 1000 760; center on] chromium --app=https://messages.google.com/web/conversations --user-data-dir=$HOME/.local/share/google-messages" >/dev/null
+  elif [ "$ws" = "$cur" ]; then
+    hyprctl dispatch movetoworkspacesilent "special:messages,address:$a" >/dev/null
+  else
+    hyprctl --batch "dispatch movetoworkspacesilent $cur,address:$a; dispatch setfloating address:$a; dispatch focuswindow address:$a; dispatch centerwindow" >/dev/null
+  fi
+  ;;
+esac

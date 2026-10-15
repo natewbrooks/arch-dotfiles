@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkMenu" id="menu">
+    <child>
+      <object class="GtkMenuItem" id="open_received">
+        <style><class name="last"/></style>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">  Open transfer folder</property>
+            <property name="xalign">0</property>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">0</property>
+        <property name="bottom-attach">1</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="sep_top"/>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">1</property>
+        <property name="bottom-attach">2</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="hdr_phone">
+        <property name="label">PHONE</property>
+        <property name="sensitive">false</property>
+        <style><class name="header"/><class name="phone"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">1</property>
+        <property name="top-attach">2</property>
+        <property name="bottom-attach">3</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="hdr_pc">
+        <property name="label">@PEER@</property>
+        <property name="sensitive">false</property>
+        <style><class name="header"/><class name="pc"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">1</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">2</property>
+        <property name="bottom-attach">3</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="phone_clip">
+        <property name="label">Send clipboard</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">1</property>
+        <property name="top-attach">3</property>
+        <property name="bottom-attach">4</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="pc_clip">
+        <property name="label">Send clipboard</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">1</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">3</property>
+        <property name="bottom-attach">4</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="phone_files">
+        <property name="label">Send files</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">1</property>
+        <property name="top-attach">4</property>
+        <property name="bottom-attach">5</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="pc_files">
+        <property name="label">Send files</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">1</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">4</property>
+        <property name="bottom-attach">5</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="phone_browse">
+        <property name="label">Browse</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">1</property>
+        <property name="top-attach">5</property>
+        <property name="bottom-attach">6</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="pc_browse">
+        <property name="label">Browse</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">1</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">5</property>
+        <property name="bottom-attach">6</property>
+      </packing>
+    </child>
+  </object>
+</interface>

@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# KDE Connect actions for the waybar share dropdown.
+# Usage: kdeshare clipboard|files|browse phone|pc, kdeshare received, or kdeshare menu (prints menu-file path)
+
+# Waybar runs with a minimal PATH that lacks ~/.local/bin (filepicker lives there).
+PATH="$HOME/.local/bin:$PATH"
+
+TRANSFER="$HOME/transfer" # incoming files land here; browse imports go to $TRANSFER/import
+
+# Print the id of a reachable paired device of the given kind (phone|pc). Asks via wofi if several match.
+device() {
+  local want ids=() names=() id type name
+  case $1 in phone) want='^(phone|tablet)$' ;; *) want='^(desktop|laptop)$' ;; esac
+  while read -r id; do
+    type=$(busctl --user get-property org.kde.kdeconnect "/modules/kdeconnect/devices/$id" org.kde.kdeconnect.device type | cut -d'"' -f2)
+    [[ $type =~ $want ]] || continue
+    ids+=("$id")
+    names+=("$(busctl --user get-property org.kde.kdeconnect "/modules/kdeconnect/devices/$id" org.kde.kdeconnect.device name | cut -d'"' -f2)")
+  done < <(kdeconnect-cli -a --id-only 2>/dev/null)
+  case ${#ids[@]} in
+    0)
+      # Phones drop off discovery; rescan once before giving up.
+      [ -z "$RETRIED" ] && { RETRIED=1; kdeconnect-cli --refresh >/dev/null; sleep 3; device "$1"; return; }
+      notify-send "Share" "No reachable $1 paired"; return 1 ;;
+    1) echo "${ids[0]}" ;;
+    *)
+      name=$(printf '%s\n' "${names[@]}" | wofi --dmenu --insensitive --prompt "Send to") || return 1
+      for i in "${!names[@]}"; do [ "${names[$i]}" = "$name" ] && echo "${ids[$i]}"; done
+      ;;
+  esac
+}
+
+# Print a device property (name, type) from KDE Connect.
+prop() { busctl --user get-property org.kde.kdeconnect "/modules/kdeconnect/devices/$1" org.kde.kdeconnect.device "$2" | cut -d'"' -f2; }
+
+case $1 in
+menu)
+  # Fill the dropdown template with the paired computer's name (VOID/VORTEX).
+  # Runs inside waybar's startup for every bar, so read KDE Connect's config file instead of slow D-Bus calls.
+  peer=$(awk -F= '/^\[/ { name = "" } /^name=/ { name = $2 } /^type=(desktop|laptop)$/ { print name }' \
+    "$HOME/.config/kdeconnect/trusted_devices" 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]')
+  out="${XDG_RUNTIME_DIR:-/tmp}/share_menu.xml"
+  sed "s/@PEER@/${peer:-COMPUTER}/" "$HOME/.config/waybar/share_menu.xml" > "$out"
+  echo "$out"
+  ;;
+clipboard)
+  id=$(device "$2") || exit
+  if wl-paste -l | grep -q '^image/'; then
+    # Images go as a file; text goes to the device clipboard.
+    f="${XDG_RUNTIME_DIR:-/tmp}/clipboard-$(date +%s).png"
+    wl-paste -t image/png > "$f" && kdeconnect-cli -d "$id" --share "$f"
+  else
+    kdeconnect-cli -d "$id" --share-text "$(wl-paste -n)"
+  fi && notify-send "Share" "Clipboard sent"
+  ;;
+files)
+  id=$(device "$2") || exit
+  name=$(prop "$id" name)
+  files=$(filepicker "Send to $name" Send "$HOME") && [ -n "$files" ] || exit 0
+  mapfile -t list <<<"$files"
+  if [ "$2" = pc ]; then
+    # Computers: straight into their ~/transfer over SSH (host alias = device name).
+    rsync -a --mkpath -- "${list[@]}" "$name:transfer/" || { notify-send "Share" "Send to $name failed"; exit 1; }
+  else
+    for f in "${list[@]}"; do kdeconnect-cli -d "$id" --share "$f"; done
+  fi
+  notify-send "Share" "Sent ${#list[@]} file(s) to $name"
+  ;;
+browse)
+  id=$(device "$2") || exit
+  name=$(prop "$id" name)
+  if [ "$2" = pc ]; then
+    # Computers don't serve SFTP over KDE Connect; mount over SSH via gvfs and pick from its FUSE path.
+    gio mount "sftp://$name/" 2>/dev/null
+    start="/run/user/$UID/gvfs/sftp:host=$name/home/$USER"
+  else
+    obj="/modules/kdeconnect/devices/$id/sftp"
+    busctl --user call org.kde.kdeconnect "$obj" org.kde.kdeconnect.device.sftp mountAndWait | grep -q true \
+      || { notify-send "Share" "$name does not allow browsing"; exit 1; }
+    start=$(busctl --user call org.kde.kdeconnect "$obj" org.kde.kdeconnect.device.sftp mountPoint | cut -d'"' -f2)
+  fi
+  files=$(filepicker "Import from $name" Import "$start") && [ -n "$files" ] || exit 0
+  mapfile -t list <<<"$files"
+  mkdir -p "$TRANSFER/import"
+  cp -r -- "${list[@]}" "$TRANSFER/import/" && notify-send "Share" "Imported ${#list[@]} file(s) from $name"
+  ;;
+received)
+  mkdir -p "$TRANSFER/import"
+  nautilus --new-window "$TRANSFER"
+  ;;
+esac

@@ -23,14 +23,16 @@
         "bluetooth",
         "custom/lighting",
         "battery",
-        "custom/notifications",
         "power-profiles-daemon",
         "custom/vpn",
-        "custom/sysinfo",
         "custom/claude",
         "custom/ledger",
         "clock",
-        "custom/kdeconnect",
+        "custom/share",
+        "custom/messages",
+        "custom/messages-badge",
+        "custom/notifications",
+        "custom/notifications-badge",
         "tray",
         "custom/power"
     ],
@@ -62,12 +64,30 @@
             "unlocked": ""
         }
     },
-    "custom/kdeconnect": {
-        "exec": "echo ",
-        "interval": "once",
-        "format": "{}",
-        "tooltip": false,
-        "on-click": "kdeconnect-app"
+    "custom/share": {
+        "format": "\uf1e0",
+        "tooltip-format": "Share with phone / computer",
+        "menu": "on-click",
+        "menu-file": "$($HOME/.local/bin/kdeshare menu)",
+        "menu-actions": {
+            "open_received": "$HOME/.local/bin/kdeshare received",
+            "phone_clip": "$HOME/.local/bin/kdeshare clipboard phone",
+            "pc_clip": "$HOME/.local/bin/kdeshare clipboard pc",
+            "phone_files": "$HOME/.local/bin/kdeshare files phone",
+            "pc_files": "$HOME/.local/bin/kdeshare files pc",
+            "phone_browse": "$HOME/.local/bin/kdeshare browse phone",
+            "pc_browse": "$HOME/.local/bin/kdeshare browse pc"
+        }
+    },
+    "custom/messages": {
+        "format": "\uf4ad",
+        "tooltip-format": "Messages",
+        "on-click": "$HOME/.local/bin/messages toggle"
+    },
+    "custom/messages-badge": {
+        "exec": "$HOME/.local/bin/messages watch",
+        "return-type": "json",
+        "on-click": "$HOME/.local/bin/messages toggle"
     },
     "custom/claude": {
         "exec": "$HOME/.config/waybar/claude.sh",
@@ -128,13 +148,6 @@
         "on-click": "$HOME/.config/waybar/vpn.sh toggle",
         "on-click-right": "$HOME/.config/waybar/vpn.sh check"
     },
-    "custom/sysinfo": {
-        "exec": "$HOME/.config/waybar/sysinfo.sh",
-        "interval": 3,
-        "return-type": "json",
-        "format": "",
-        "on-click": "kitty -e htop"
-    },
     "custom/ledger": {
         "exec": "$HOME/.config/waybar/ledger-timer.sh",
         "interval": 1,
@@ -152,18 +165,24 @@
         "return-type": "json",
         "format": "{}"
     },
+    "custom/notifications-badge": {
+        "exec": "$HOME/.local/bin/notifications-badge",
+        "return-type": "json",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw"
+    },
     "custom/notifications": {
         "exec": "swaync-client -swb 2>/dev/null",
         "return-type": "json",
         "format": "{icon}",
         "format-icons": {
-            "notification":               " <span foreground='#f53c3c'>•</span>",
+            "notification":               "",
             "none":                       "",
-            "dnd-notification":           " <span foreground='#f53c3c'>•</span>",
+            "dnd-notification":           "",
             "dnd-none":                   "",
-            "inhibited-notification":     " <span foreground='#f53c3c'>•</span>",
+            "inhibited-notification":     "",
             "inhibited-none":             "",
-            "dnd-inhibited-notification": " <span foreground='#f53c3c'>•</span>",
+            "dnd-inhibited-notification": "",
             "dnd-inhibited-none":         ""
         },
         "tooltip-format": "Notifications",
@@ -353,10 +372,13 @@
     },
     "custom/power": {
         "format" : "",
-		"tooltip": false,
+        "exec": "$HOME/.config/waybar/sysinfo.sh", // hover tooltip = system stats
+        "return-type": "json",
+        "interval": 3,
 		"menu": "on-click",
 		"menu-file": "$HOME/.config/waybar/power_menu.xml", // Menu file in resources folder
 		"menu-actions": {
+            "sysmon": "kitty -e htop",
             "logout": "fusermount -uz $HOME/dev/omcor; hyprctl dispatch exit", // lock omcor vault on logout
 			"shutdown": "shutdown now",
 			"reboot": "reboot",
