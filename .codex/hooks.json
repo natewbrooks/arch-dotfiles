@@ -1,0 +1,74 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SESSION_AGENT=codex bash \"$HOME/.claude/hooks/session-track.sh\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SESSION_AGENT=codex bash \"$HOME/.claude/hooks/session-track.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SESSION_AGENT=codex bash \"$HOME/.claude/hooks/session-track.sh\""
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SESSION_AGENT=codex bash \"$HOME/.claude/hooks/session-track.sh\""
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SESSION_AGENT=codex bash \"$HOME/.claude/hooks/session-track.sh\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SESSION_AGENT=codex bash \"$HOME/.claude/hooks/session-track.sh\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SESSION_AGENT=codex bash \"$HOME/.claude/hooks/session-track.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

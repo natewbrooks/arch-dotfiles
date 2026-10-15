@@ -33,4 +33,5 @@ tooltip=" System
  Net       ${ssid}   ${ip}
  Up        ${uptime_str}"
 
-jq -nc --arg t "$tooltip" '{text:"", tooltip:$t, class:"sysinfo"}'
+# Text is the power icon: this feeds the power button, whose hover shows these stats.
+jq -nc --arg t "$tooltip" '{text:"\uf011", tooltip:$t, class:"sysinfo"}'

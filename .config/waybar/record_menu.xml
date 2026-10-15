@@ -46,7 +46,7 @@
     </child>
     <child>
       <object class="GtkMenuItem" id="hdr_video">
-        <property name="label">RECORD</property>
+        <property name="label">  VIDEO</property>
         <property name="sensitive">false</property>
         <style><class name="header"/><class name="video"/></style>
       </object>
@@ -59,7 +59,7 @@
     </child>
     <child>
       <object class="GtkMenuItem" id="hdr_gif">
-        <property name="label">GIF</property>
+        <property name="label">  GIF</property>
         <property name="sensitive">false</property>
         <style><class name="header"/><class name="gif"/></style>
       </object>

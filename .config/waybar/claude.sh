@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Waybar module for Claude Code sessions (state written by ~/.claude/hooks/session-track.sh).
+# Waybar module for Claude Code and Codex sessions (state written by ~/.claude/hooks/session-track.sh).
 # A review-all run exports RA_RUN, so its parallel stages share a group and show as one row.
 # Usage: claude.sh          continuous json stream
 #        claude.sh next     dock the next group
@@ -44,6 +44,8 @@ row() {
   read -r st started turn ra < <(agg "$1" | jq -r '"\(.status) \(.started) \(.turn) \(.ra)"')
   if [[ -n $ra ]]; then t="review-all $1: $ra"; else t=$(title "$(members "$1" | head -1)"); fi
   t=${t//&/&amp;}; t=${t//</&lt;}; t=${t//>/&gt;}
+  # Codex sessions get a green tag.
+  [[ $(jq -r '.agent // "claude"' "$(members "$1" | head -1)") == codex ]] && t="<span foreground=\"#10a37f\">codex</span> $t"
   # states: running (main or subagents busy), ready (turn done, all subagents in), waiting (permission/input prompt), idle (no prompt yet)
   case $st in running) st=working ;; waiting) st=input ;; esac
   printf '%s. %s\t[%s]\t<span foreground="#b084eb">%s</span> | <span foreground="#4ade80">%s</span>\n' \
@@ -70,12 +72,11 @@ case ${1:-} in
 esac
 
 while :; do
-  text=""; class=none
+  text=$'\uf544'; class=none  # fa-robot, always shown; class drives color/breathe
   prune; mapfile -t all < <(groups)
   cur=$(docked)
   if [[ -n $cur ]]; then
     class=$(agg "$cur" | jq -r .status)
-    text=$''  # fa-robot, class drives color/breathe
   fi
   jq -nc --arg t "$text" --arg c "$class" '{text:$t, class:$c}'
   sleep 1

@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Build the waybar tools dropdown (share grid on top, record grid below) and print its path.
+
+Waybar runs this from `menu-file` when each bar loads, so it must stay fast and avoid D-Bus.
+record_menu.xml is kept as-is because record-ctl rewrites its clipboard toggle in place.
+"""
+import configparser
+import os
+import xml.etree.ElementTree as ET
+
+home = os.path.expanduser('~')
+waybar = f'{home}/.config/waybar'
+
+
+def peer_name():
+    """Paired computer's name (VOID/VORTEX) from KDE Connect's config file."""
+    cfg = configparser.ConfigParser(interpolation=None, strict=False)
+    cfg.read(f'{home}/.config/kdeconnect/trusted_devices')
+    for section in cfg.sections():
+        if cfg[section].get('type') in ('desktop', 'laptop'):
+            return cfg[section].get('name', 'computer').upper()
+    return 'COMPUTER'
+
+
+def rows(menu):
+    """Highest bottom-attach in a grid menu."""
+    return max(int(p.text) for p in menu.iter('property') if p.get('name') == 'bottom-attach')
+
+
+def shift(child, by):
+    for p in child.iter('property'):
+        if p.get('name') in ('top-attach', 'bottom-attach'):
+            p.text = str(int(p.text) + by)
+
+
+record = ET.parse(f'{waybar}/record_menu.xml')
+share = ET.fromstring(open(f'{waybar}/share_menu.xml').read().replace('@PEER@', peer_name()))
+menu = record.getroot().find('object')
+record_children = menu.findall('child')
+for child in record_children:
+    menu.remove(child)
+
+
+def grid_item(xml, top):
+    """A full-width row at grid line `top`."""
+    return ET.fromstring(
+        f'<child>{xml}<packing><property name="left-attach">0</property><property name="right-attach">2</property>'
+        f'<property name="top-attach">{top}</property><property name="bottom-attach">{top + 1}</property></packing></child>')
+
+
+def header(id_, label, top, icon):
+    """Centered section label with a leading icon (a child GtkLabel, since a menu item's own label is always left-aligned).
+    An invisible copy of the icon after the word balances the visible one, so the word itself is centered."""
+    return grid_item(f'<object class="GtkMenuItem" id="{id_}"><property name="sensitive">false</property>'
+                     f'<style><class name="header"/><class name="section"/><class name="{label.lower()}"/></style>'
+                     f'<child><object class="GtkLabel"><property name="use-markup">true</property>'
+                     f'<property name="label">{icon} {label} '
+                     f'&lt;span alpha="1"&gt;{icon}&lt;/span&gt;</property>'
+                     f'<property name="xalign">0.5</property></object></child></object>', top)
+
+
+def divider(id_, top):
+    return grid_item(f'<object class="GtkSeparatorMenuItem" id="{id_}"/>', top)
+
+
+# SHARE, divider, share grid; then RECORD, divider, record grid.
+menu.append(header('hdr_share', 'SHARE', 0, '\uf1e0'))
+menu.append(divider('sep_share', 1))
+share_rows = rows(share.find('object'))
+for child in share.find('object').findall('child'):
+    shift(child, 2)
+    menu.append(child)
+menu.append(header('hdr_record', 'RECORD', share_rows + 2, '\U000f0fce'))  # nf-md-movie_open (Symbols Nerd Font)
+menu.append(divider('sep_record', share_rows + 3))
+for child in record_children:
+    shift(child, share_rows + 4)
+    menu.append(child)
+
+out = os.path.join(os.environ.get('XDG_RUNTIME_DIR', '/tmp'), 'tools_menu.xml')
+record.write(out, encoding='UTF-8', xml_declaration=True)
+print(out)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # KDE Connect actions for the waybar share dropdown.
-# Usage: kdeshare clipboard|files|browse phone|pc, kdeshare received, or kdeshare menu (prints menu-file path)
+# Usage: kdeshare clipboard|files|browse phone|pc, or kdeshare received
 
 # Waybar runs with a minimal PATH that lacks ~/.local/bin (filepicker lives there).
 PATH="$HOME/.local/bin:$PATH"
@@ -34,15 +34,6 @@ device() {
 prop() { busctl --user get-property org.kde.kdeconnect "/modules/kdeconnect/devices/$1" org.kde.kdeconnect.device "$2" | cut -d'"' -f2; }
 
 case $1 in
-menu)
-  # Fill the dropdown template with the paired computer's name (VOID/VORTEX).
-  # Runs inside waybar's startup for every bar, so read KDE Connect's config file instead of slow D-Bus calls.
-  peer=$(awk -F= '/^\[/ { name = "" } /^name=/ { name = $2 } /^type=(desktop|laptop)$/ { print name }' \
-    "$HOME/.config/kdeconnect/trusted_devices" 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]')
-  out="${XDG_RUNTIME_DIR:-/tmp}/share_menu.xml"
-  sed "s/@PEER@/${peer:-COMPUTER}/" "$HOME/.config/waybar/share_menu.xml" > "$out"
-  echo "$out"
-  ;;
 clipboard)
   id=$(device "$2") || exit
   if wl-paste -l | grep -q '^image/'; then

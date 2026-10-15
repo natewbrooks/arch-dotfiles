@@ -4,7 +4,7 @@
     // "position": "bottom", // Waybar position (top|bottom|left|right)
     "height": 24, // Waybar height (to be removed for auto height)
     // "width": 1280, // Waybar width
-    "spacing": 3, // Gaps between modules (4px)
+    "spacing": 0, // Even gaps come from uniform module padding in style.css
     // Choose the order of the modules
     "modules-left": [
         "hyprland/workspaces",
@@ -15,20 +15,16 @@
     ],
     "modules-center": [],
     "modules-right": [
-        "custom/cava",
-        "custom/record",
-        "custom/record-pause",
-        "custom/record-stop",
         "pulseaudio",
-        "bluetooth",
-        "custom/lighting",
-        "battery",
+        "custom/battery",
         "power-profiles-daemon",
         "custom/vpn",
         "custom/claude",
         "custom/ledger",
         "clock",
-        "custom/share",
+        "custom/record",
+        "custom/record-pause",
+        "custom/record-stop",
         "custom/messages",
         "custom/messages-badge",
         "custom/notifications",
@@ -64,21 +60,6 @@
             "unlocked": ""
         }
     },
-    "custom/share": {
-        "format": "\uf1e0",
-        "tooltip-format": "Share with phone / computer",
-        "menu": "on-click",
-        "menu-file": "$($HOME/.local/bin/kdeshare menu)",
-        "menu-actions": {
-            "open_received": "$HOME/.local/bin/kdeshare received",
-            "phone_clip": "$HOME/.local/bin/kdeshare clipboard phone",
-            "pc_clip": "$HOME/.local/bin/kdeshare clipboard pc",
-            "phone_files": "$HOME/.local/bin/kdeshare files phone",
-            "pc_files": "$HOME/.local/bin/kdeshare files pc",
-            "phone_browse": "$HOME/.local/bin/kdeshare browse phone",
-            "pc_browse": "$HOME/.local/bin/kdeshare browse pc"
-        }
-    },
     "custom/messages": {
         "format": "\uf4ad",
         "tooltip-format": "Messages",
@@ -99,12 +80,6 @@
         "on-scroll-up": "$HOME/.config/waybar/claude.sh next",
         "on-scroll-down": "$HOME/.config/waybar/claude.sh next"
     },
-    "custom/cava": {
-        "exec": "$HOME/.config/waybar/cava.sh",
-        "format": "{}",
-        "tooltip": false,
-        "restart-interval": 1
-    },
     "custom/record": {
         "exec": "$HOME/.local/bin/record-ctl status",
         "interval": 1,
@@ -112,7 +87,7 @@
         "signal": 10,
         "format": "{}",
         "menu": "on-click",
-        "menu-file": "$HOME/.config/waybar/record_menu.xml",
+        "menu-file": "$($HOME/.local/bin/tools-menu)",
         "menu-actions": {
             "open_last": "$HOME/.local/bin/record-ctl open-last",
             "open_last_shot": "$HOME/.local/bin/record-ctl open-last-shot",
@@ -120,7 +95,14 @@
             "video_region": "$HOME/.local/bin/record-ctl start video region",
             "video_full": "$HOME/.local/bin/record-ctl start video full",
             "gif_region": "$HOME/.local/bin/record-ctl start gif region",
-            "gif_full": "$HOME/.local/bin/record-ctl start gif full"
+            "gif_full": "$HOME/.local/bin/record-ctl start gif full",
+            "open_received": "$HOME/.local/bin/kdeshare received",
+            "phone_clip": "$HOME/.local/bin/kdeshare clipboard phone",
+            "pc_clip": "$HOME/.local/bin/kdeshare clipboard pc",
+            "phone_files": "$HOME/.local/bin/kdeshare files phone",
+            "pc_files": "$HOME/.local/bin/kdeshare files pc",
+            "phone_browse": "$HOME/.local/bin/kdeshare browse phone",
+            "pc_browse": "$HOME/.local/bin/kdeshare browse pc"
         }
     },
     "custom/record-pause": {
@@ -158,12 +140,6 @@
         "on-click-middle": "$HOME/.config/waybar/ledger-timer.sh toggle && pkill -RTMIN+9 waybar",
         "on-scroll-up": "$HOME/.config/waybar/ledger-timer.sh next && pkill -RTMIN+9 waybar",
         "on-scroll-down": "$HOME/.config/waybar/ledger-timer.sh next && pkill -RTMIN+9 waybar"
-    },
-    "custom/lighting": {
-        "exec": "$HOME/.config/waybar/lighting.sh",
-        "interval": 1,
-        "return-type": "json",
-        "format": "{}"
     },
     "custom/notifications-badge": {
         "exec": "$HOME/.local/bin/notifications-badge",
@@ -287,23 +263,6 @@
         "format": "{percent}% {icon}",
         "format-icons": ["", "", "", "", "", "", "", "", ""]
     },
-    "battery": {
-        "states": {
-            "good": 90,
-            "warning": 30,
-            "critical": 15
-        },
-        "format": "{capacity}% {icon}",
-        "format-full": "{capacity}% {icon}",
-        "format-charging": "{capacity}% ",
-        "format-plugged": "{capacity}% ",
-        "format-alt": "{time} {icon}",
-        "format-time": "{H}hr {m}min",
-        "interval": 30,
-        // "format-good": "", // An empty format will hide the module
-        // "format-full": "",
-        "format-icons": ["", "", "", "", ""]
-    },
     "battery#bat2": {
         "bat": "BAT2"
     },
@@ -336,12 +295,12 @@
     },
     "pulseaudio": {
         // "scroll-step": 1, // %, can be a float
-        "format": "{volume}% {icon} {format_source}",
-        "format-bluetooth": "{volume}% {icon} {format_source}",
-        "format-bluetooth-muted": " {icon}",
-        "format-muted": "",
-        "format-source": "{volume}% ",
-        "format-source-muted": "",
+        "format": "{icon} {volume}%{format_source}",
+        "format-bluetooth": "{icon} {volume}%{format_source}",
+        "format-bluetooth-muted": " {icon}{format_source}",
+        "format-muted": "{format_source}",
+        "format-source": "",
+        "format-source-muted": " <span color='#f53c3c'></span>",
         "format-icons": {
             "headphone": "",
             "hands-free": "",
@@ -351,7 +310,10 @@
             "car": "",
             "default": ["", "", ""]
         },
-        "on-click": "pavucontrol"
+        // Mic only shows when muted; its level lives in the tooltip.
+        "tooltip-format": "{desc}\nVolume {volume}%\nMic {source_volume}%",
+        "on-click": "pavucontrol",
+        "on-click-right": "pactl set-source-mute @DEFAULT_SOURCE@ toggle"
     },
     "pulseaudio/slider": {
         "min": 0,
@@ -370,8 +332,13 @@
         "exec": "$HOME/.config/waybar/mediaplayer.py 2> /dev/null" // Script in resources folder
         // "exec": "$HOME/.config/waybar/mediaplayer.py --player spotify 2> /dev/null" // Filter player based on name
     },
+    "custom/battery": {
+        "exec": "$HOME/.config/waybar/battery.sh",
+        "return-type": "json",
+        "interval": 10
+    },
     "custom/power": {
-        "format" : "",
+        "format": "{}",
         "exec": "$HOME/.config/waybar/sysinfo.sh", // hover tooltip = system stats
         "return-type": "json",
         "interval": 3,

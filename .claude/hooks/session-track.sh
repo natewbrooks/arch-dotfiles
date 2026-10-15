@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Claude Code hook: track top-level sessions for waybar + play the finished noise.
+# Claude Code / Codex hook: track top-level sessions for waybar + play the finished noise.
 # Wired to SessionStart, UserPromptSubmit, Stop, Notification, SessionEnd, SubagentStart, SubagentStop.
+# Codex runs it with SESSION_AGENT=codex (~/.codex/hooks.json); its PermissionRequest counts as Notification.
 # Hooks firing inside a subagent carry agent_id and are ignored, except Subagent{Start,Stop}
 # which keep a live agent count: the session only counts as finished once main has stopped
 # and every (background) subagent is in.
@@ -10,14 +11,16 @@ in=$(cat)
 ev=$(jq -r .hook_event_name <<<"$in")
 [[ $ev == Subagent* ]] || ! jq -e '.agent_id' <<<"$in" >/dev/null 2>&1 || exit 0
 [[ -n ${CLAUDE_TRACK_SKIP:-} ]] && exit 0  # the title generator below is itself a claude run
+agent=${SESSION_AGENT:-claude}
+[[ $ev == PermissionRequest ]] && ev=Notification
 sid=$(jq -r .session_id <<<"$in")
 f="$DIR/$sid"
 now=$(date +%s)
 
-# pid of the claude process, so the waybar side can prune sessions killed without SessionEnd
+# pid of the claude/codex process, so the waybar side can prune sessions killed without SessionEnd
 pid=$PPID
 for _ in 1 2 3 4 5; do
-  grep -q claude "/proc/$pid/cmdline" 2>/dev/null && break
+  grep -q "$agent" "/proc/$pid/cmdline" 2>/dev/null && break
   pid=$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null) || break
 done
 
@@ -80,9 +83,9 @@ case $ev in
     started=$(jq -r '.started // empty' "$f" 2>/dev/null)
     turn=$(jq -r '.turn // empty' "$f" 2>/dev/null)
     [[ $ev == UserPromptSubmit || -z $turn ]] && turn=$now
-    jq -nc --arg s "$status" --arg n "$name" --arg tr "$(jq -r '.transcript_path // ""' <<<"$in")" --arg ti "$title" --arg m "$main" --arg g "$group" --arg pz "$pause" --arg tx "$text" \
+    jq -nc --arg s "$status" --arg n "$name" --arg tr "$(jq -r '.transcript_path // ""' <<<"$in")" --arg ti "$title" --arg m "$main" --arg g "$group" --arg pz "$pause" --arg tx "$text" --arg ag "$agent" \
       --argjson st "${started:-$now}" --argjson t "$turn" --argjson p "${pid:-0}" --argjson a "$agents" --argjson d "$done" \
-      '{status:$s, name:$n, title:$ti, transcript:$tr, started:$st, turn:$t, pid:$p, main:$m, agents:$a, done:$d, group:$g, pause:$pz, text:$tx}' > "$f"
+      '{status:$s, name:$n, title:$ti, transcript:$tr, started:$st, turn:$t, pid:$p, main:$m, agents:$a, done:$d, group:$g, pause:$pz, text:$tx, agent:$ag}' > "$f"
     # One-shot haiku summary of the first prompt, written back once it lands.
     if [[ $ev == UserPromptSubmit && -z $title && -z $RA_STAGE ]]; then
       ( t=$(jq -r .prompt <<<"$in" | head -c 2000 | CLAUDE_TRACK_SKIP=1 claude -p --model haiku \

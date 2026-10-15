@@ -134,7 +134,7 @@ open_last_shot() {
 status() {
     if ! load; then
         case $1 in
-            "") echo '{"text":"\uf03d","class":"idle","tooltip":"Record screen / GIF"}' ;;
+            "") echo '{"text":"\uf552","class":"idle","tooltip":"Tools: record, share"}' ;;
             *) echo '{"text":""}' ;;
         esac
         return
