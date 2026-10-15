@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Overlay for record-ctl: `record-overlay [X,Y WxH]`. Shows 3-2-1 countdown with skip (exit 1 if closed),
+prints "go" when done, then keeps a dashed frame just outside the region until killed."""
+import sys, signal, gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('GtkLayerShell', '0.1')
+gi.require_version('GLibUnix', '2.0')
+from gi.repository import Gtk, GLib, GtkLayerShell, GLibUnix
+import cairo
+
+CSS = b'''
+window { background: transparent; }
+.count { font-family: FantasqueSansMono; font-size: 160px; font-weight: 900; color: #dfdab7; text-shadow: 0 0 12px #000; }
+.skip { font-family: FantasqueSansMono; font-size: 18px; font-weight: 900; color: #30004A; background: #dfdab7; border: none; border-radius: 6px; padding: 6px 24px; }
+.skip:hover { background: #b084eb; color: #ffffff; box-shadow: 0 0 10px #b084eb; }
+'''
+
+def layer_window(anchors):
+    win = Gtk.Window()
+    screen = win.get_screen()
+    win.set_visual(screen.get_rgba_visual())
+    prov = Gtk.CssProvider()
+    prov.load_from_data(CSS)
+    Gtk.StyleContext.add_provider_for_screen(screen, prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    GtkLayerShell.init_for_window(win)
+    GtkLayerShell.set_layer(win, GtkLayerShell.Layer.OVERLAY)
+    GtkLayerShell.set_exclusive_zone(win, -1)
+    for edge in anchors:
+        GtkLayerShell.set_anchor(win, edge, True)
+    return win
+
+def countdown():
+    E = GtkLayerShell.Edge
+    win = layer_window((E.TOP, E.BOTTOM, E.LEFT, E.RIGHT))
+    def dim(widget, cr):
+        cr.set_source_rgba(0, 0, 0, 0.3)
+        cr.paint()
+        return False
+    win.set_app_paintable(True)
+    win.connect('draw', dim)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
+    label = Gtk.Label(label='3')
+    label.get_style_context().add_class('count')
+    skip = Gtk.Button(label='Skip', halign=Gtk.Align.CENTER)
+    skip.get_style_context().add_class('skip')
+    box.pack_start(label, False, False, 0)
+    box.pack_start(skip, False, False, 0)
+    win.add(box)
+    n = [3]
+    def tick():
+        n[0] -= 1
+        if n[0] <= 0:
+            Gtk.main_quit()
+            return False
+        label.set_text(str(n[0]))
+        return True
+    skip.connect('clicked', lambda *_: Gtk.main_quit())
+    win.connect('destroy', lambda *_: sys.exit(1))
+    # Persistent handler: SIGUSR1 skips the countdown, is a no-op afterwards
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, lambda *_: (n[0] > 0 and Gtk.main_quit()) or True, None)
+    timer = GLib.timeout_add(1000, tick)
+    win.show_all()
+    # Only the skip button takes input, everything else passes through
+    def clip(widget, alloc):
+        r = cairo.RectangleInt(alloc.x, alloc.y, alloc.width, alloc.height)
+        win.get_window().input_shape_combine_region(cairo.Region(r), 0, 0)
+    skip.connect('size-allocate', clip)
+    Gtk.main()
+    # Skip leaves the tick timer alive, it would quit the frame loop next
+    GLib.source_remove(timer) if n[0] > 0 else None
+    n[0] = 0
+    win.hide()
+
+def border(pos, size):
+    # Frame sits 3px outside the region so its pixels are never captured
+    # ponytail: margins assume region on the primary monitor at 0,0
+    x, y = (int(v) - 3 for v in pos.split(','))
+    w, h = (int(v) + 6 for v in size.split('x'))
+    E = GtkLayerShell.Edge
+    win = layer_window((E.TOP, E.LEFT))
+    GtkLayerShell.set_margin(win, E.TOP, y)
+    GtkLayerShell.set_margin(win, E.LEFT, x)
+    win.set_size_request(w, h)
+    area = Gtk.DrawingArea()
+    def draw(widget, cr):
+        cr.set_source_rgba(223 / 255, 218 / 255, 183 / 255, 0.35)
+        cr.set_line_width(3)
+        cr.set_dash([14, 10])
+        cr.rectangle(1.5, 1.5, w - 3, h - 3)
+        cr.stroke()
+    area.connect('draw', draw)
+    win.add(area)
+    win.show_all()
+    # Empty input region: clicks pass through
+    win.get_window().input_shape_combine_region(cairo.Region(), 0, 0)
+
+countdown()
+if len(sys.argv) > 2:
+    border(sys.argv[1], sys.argv[2])
+print('go', flush=True)
+if len(sys.argv) > 2:
+    print('frame up', file=sys.stderr, flush=True)
+    Gtk.main()
+    print('frame loop exited', file=sys.stderr, flush=True)

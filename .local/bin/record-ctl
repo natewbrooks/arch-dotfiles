@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# Screen/GIF recorder with pause via segments. Drives waybar custom/record* modules.
+# Usage: record-ctl start|toggle <video|gif> <region|full> | pause | stop | hotkey | open-last | open-last-shot | clip-toggle | status [pause|stop]
+
+export LIBVA_DRIVER_NAME=iHD
+STATE_DIR="/tmp/screen-recorder"
+STATE="$STATE_DIR/state"
+LAST="$HOME/.cache/record-last"
+CLIP="$HOME/.cache/record-clip"
+MENU="$HOME/.config/waybar/record_menu.xml"
+SIG=10
+mkdir -p "$STATE_DIR"
+
+refresh() { pkill -RTMIN+$SIG waybar; }
+load() { [[ -f "$STATE" ]] && source "$STATE"; }
+save() {
+    cat > "$STATE" <<EOS
+MODE=$MODE
+GEOM='$GEOM'
+OUTPUT=$OUTPUT
+OUT=$OUT
+STATUS=$STATUS
+START=$START
+ELAPSED=$ELAPSED
+PART=$PART
+EOS
+}
+
+# wf-recorder tags output full range but converts limited, scale filter makes the data match the tag
+segment() {
+    PART=$((PART + 1))
+    START=$(date +%s)
+    STATUS=recording
+    save
+    if [[ -n "$GEOM" ]]; then
+        wf-recorder -g "$GEOM" -F scale=out_range=full -p crf=28 -f "$STATE_DIR/part_$PART.mp4" >/dev/null 2>&1 &
+    else
+        wf-recorder -o "$OUTPUT" -F scale=out_range=full -p crf=28 -f "$STATE_DIR/part_$PART.mp4" >/dev/null 2>&1 &
+    fi
+}
+
+halt() {
+    pkill -SIGINT -x wf-recorder
+    while pgrep -x wf-recorder >/dev/null; do sleep 0.1; done
+    ELAPSED=$((ELAPSED + $(date +%s) - START))
+}
+
+start() {
+    [[ -f "$STATE" ]] && exit 0
+    MODE=$1
+    # Window title up to the first separator, e.g. "BidSlam - Zen Browser" -> "BidSlam"
+    TITLE=$(hyprctl activewindow -j | jq -r '.title // ""' | sed -E 's/ +(-|\||—|–) .*//' | tr -cs '[:alnum:]' '_' | sed 's/^_//;s/_$//' | cut -c1-30)
+    OUTPUT=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')
+    GEOM=""
+    if [[ $2 == region ]]; then
+        GEOM=$(slurp 2>/dev/null)
+        [[ -z "$GEOM" ]] && { notify-send "Recording" "Selection cancelled" -t 2000; exit 0; }
+    fi
+    # Overlay runs countdown, prints "go", then keeps the region frame up until killed on stop
+    echo "$(date +%T) start mode=$MODE geom='$GEOM'" >> "$HOME/.cache/record.log"
+    exec 3< <(setsid "$HOME/.local/bin/record-overlay" $GEOM 2>> "$HOME/.cache/record.log")
+    read -r GO <&3 || { notify-send "Recording" "Cancelled" -t 2000; exit 0; }
+    rm -f "$STATE_DIR"/part_*.mp4
+    if [[ $MODE == gif ]]; then
+        OUT="$HOME/gifs/recording_$(date +%Y%m%d_%H%M%S)${TITLE:+_$TITLE}.gif"
+    else
+        OUT="$HOME/recordings/recording_$(date +%Y%m%d_%H%M%S)${TITLE:+_$TITLE}.mp4"
+    fi
+    mkdir -p "$(dirname "$OUT")"
+    ELAPSED=0 PART=0
+    segment
+    refresh
+}
+
+pause() {
+    load || exit 0
+    if [[ $STATUS == recording ]]; then
+        halt
+        STATUS=paused
+        save
+    else
+        segment
+    fi
+    refresh
+}
+
+stop() {
+    load || exit 0
+    [[ $STATUS == recording ]] && halt
+    echo "$(date +%T) stop overlay_alive=$(pgrep -fc 'python3.*record-overlay')" >> "$HOME/.cache/record.log"
+    pkill -f "bin/record-overlay"
+    rm -f "$STATE"
+    refresh
+    for f in "$STATE_DIR"/part_*.mp4; do echo "file '$f'"; done > "$STATE_DIR/list.txt"
+    MP4="$STATE_DIR/joined.mp4"
+    if [[ $PART -eq 1 ]]; then
+        mv "$STATE_DIR/part_1.mp4" "$MP4"
+    else
+        ffmpeg -y -v error -f concat -safe 0 -i "$STATE_DIR/list.txt" -c copy "$MP4"
+    fi
+    if [[ $MODE == gif ]]; then
+        notify-send "Recording" "Converting to GIF..." -t 2000
+        ffmpeg -y -v error -i "$MP4" \
+            -vf "fps=15,scale='min(720,iw)':-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=256:stats_mode=diff[p];[s1][p]paletteuse=dither=floyd_steinberg" \
+            "$OUT"
+    else
+        mv "$MP4" "$OUT"
+    fi
+    rm -f "$STATE_DIR"/part_*.mp4 "$STATE_DIR/list.txt" "$MP4"
+    if [[ ! -s "$OUT" ]]; then
+        notify-send "Recording" "Failed - no video data" -u critical
+        exit 1
+    fi
+    echo -n "$OUT" > "$LAST"
+    # text/uri-list is what Dolphin puts on the clipboard, so browsers paste it as a file
+    [[ -f "$CLIP" ]] && printf 'file://%s\r\n' "$OUT" | wl-copy -t text/uri-list
+}
+
+# Flag file drives behavior. Menu xml is synced so the check state survives a waybar restart
+clip_toggle() {
+    if [[ -f "$CLIP" ]]; then rm -f "$CLIP"; ON=False; else touch "$CLIP"; ON=True; fi
+    sed -i "/id=\"clip_toggle\"/,/<\/object>/s/name=\"active\">[A-Za-z]*</name=\"active\">$ON</" "$MENU"
+}
+
+open_last() {
+    [[ -s "$LAST" ]] && hyprctl dispatch exec "[float]" "dolphin --select '$(cat "$LAST")'"
+}
+
+open_last_shot() {
+    SHOT=$(ls -t "$HOME/Pictures"/*_hyprshot.png 2>/dev/null | head -1)
+    [[ -n "$SHOT" ]] && hyprctl dispatch exec "[float]" "dolphin --select '$SHOT'"
+}
+
+status() {
+    if ! load; then
+        case $1 in
+            "") echo '{"text":"\uf552","class":"idle","tooltip":"Tools: record, share"}' ;;
+            *) echo '{"text":""}' ;;
+        esac
+        return
+    fi
+    case $1 in
+        pause) [[ $STATUS == recording ]] && echo '{"text":"\uf04c","class":"recording","tooltip":"Pause"}' || echo '{"text":"\uf04b","class":"paused","tooltip":"Resume"}' ;;
+        stop) echo "{\"text\":\"\\uf04d\",\"class\":\"$STATUS\",\"tooltip\":\"Stop and save\"}" ;;
+        *)
+            NOW=$(date +%s)
+            SECS=$ELAPSED
+            [[ $STATUS == recording ]] && SECS=$((SECS + NOW - START))
+            SIZE=$(du -ch "$STATE_DIR"/part_*.mp4 2>/dev/null | tail -1 | cut -f1)
+            if [[ $STATUS == recording && $((NOW % 2)) -eq 0 ]]; then DOT="<span foreground='#f53c3c'>●</span>"
+            elif [[ $STATUS == recording ]]; then DOT="<span foreground='#5a1a1a'>●</span>"
+            else DOT="<span foreground='#e99c29'>●</span>"; fi
+            printf '{"text":"%s %02d:%02d %s","class":"%s","tooltip":"%s %s"}\n' "$DOT" $((SECS / 60)) $((SECS % 60)) "$SIZE" "$STATUS" "$MODE" "$OUT" ;;
+    esac
+}
+
+case $1 in
+    start) start "$2" "$3" ;;
+    toggle) [[ -f "$STATE" ]] && stop || start "$2" "$3" ;;
+    pause) pause ;;
+    stop) stop ;;
+    hotkey) [[ -f "$STATE" ]] && pause || pkill -USR1 -f "bin/record-overlay" ;;
+    open-last) open_last ;;
+    open-last-shot) open_last_shot ;;
+    clip-toggle) clip_toggle ;;
+    status) status "$2" ;;
+    *) echo "usage: record-ctl start|toggle <video|gif> <region|full> | pause | stop | hotkey | open-last | open-last-shot | clip-toggle | status [pause|stop]" >&2; exit 1 ;;
+esac

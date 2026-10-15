@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Floating multi-select file picker for kdeshare. Prints chosen paths, one per line.
+
+Usage: filepicker TITLE BUTTON [START_DIR]
+"""
+import sys
+
+import gi
+
+gi.require_version('Gtk', '3.0')
+from gi.repository import GLib, Gtk  # noqa: E402
+
+# Wayland app id, matched by a Hyprland float rule.
+GLib.set_prgname('filepicker')
+
+title, button = sys.argv[1], sys.argv[2]
+dialog = Gtk.FileChooserDialog(title=title, action=Gtk.FileChooserAction.OPEN)
+dialog.add_buttons('Cancel', Gtk.ResponseType.CANCEL, button, Gtk.ResponseType.OK)
+dialog.set_default_response(Gtk.ResponseType.OK)
+dialog.set_select_multiple(True)
+if len(sys.argv) > 3:
+    dialog.set_current_folder(sys.argv[3])
+if dialog.run() == Gtk.ResponseType.OK:
+    print('\n'.join(dialog.get_filenames()))

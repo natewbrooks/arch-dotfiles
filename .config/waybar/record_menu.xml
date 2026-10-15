@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkMenu" id="menu">
+    <child>
+      <object class="GtkMenuItem" id="open_last">
+        <style><class name="last"/></style>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">  See last recording</property>
+            <property name="xalign">0</property>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">0</property>
+        <property name="bottom-attach">1</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="open_last_shot">
+        <style><class name="last"/></style>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">  See last screenshot</property>
+            <property name="xalign">0</property>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">1</property>
+        <property name="bottom-attach">2</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="sep_last"/>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">2</property>
+        <property name="bottom-attach">3</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="hdr_video">
+        <property name="label">  VIDEO</property>
+        <property name="sensitive">false</property>
+        <style><class name="header"/><class name="video"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">1</property>
+        <property name="top-attach">3</property>
+        <property name="bottom-attach">4</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="hdr_gif">
+        <property name="label">  GIF</property>
+        <property name="sensitive">false</property>
+        <style><class name="header"/><class name="gif"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">1</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">3</property>
+        <property name="bottom-attach">4</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="video_full">
+        <property name="label">Fullscreen</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">1</property>
+        <property name="top-attach">4</property>
+        <property name="bottom-attach">5</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="gif_full">
+        <property name="label">Fullscreen</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">1</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">4</property>
+        <property name="bottom-attach">5</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="video_region">
+        <property name="label">Region</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">1</property>
+        <property name="top-attach">5</property>
+        <property name="bottom-attach">6</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="gif_region">
+        <property name="label">Region</property>
+        <style><class name="cell"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">1</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">5</property>
+        <property name="bottom-attach">6</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="sep_clip"/>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">6</property>
+        <property name="bottom-attach">7</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkCheckMenuItem" id="clip_toggle">
+        <property name="label">Save to clipboard</property>
+        <property name="active">False</property>
+        <style><class name="last"/><class name="clip"/></style>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="right-attach">2</property>
+        <property name="top-attach">7</property>
+        <property name="bottom-attach">8</property>
+      </packing>
+    </child>
+  </object>
+</interface>

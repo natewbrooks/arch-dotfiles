@@ -4,7 +4,7 @@
     // "position": "bottom", // Waybar position (top|bottom|left|right)
     "height": 24, // Waybar height (to be removed for auto height)
     // "width": 1280, // Waybar width
-    "spacing": 3, // Gaps between modules (4px)
+    "spacing": 0, // Even gaps come from uniform module padding in style.css
     // Choose the order of the modules
     "modules-left": [
         "hyprland/workspaces",
@@ -15,15 +15,20 @@
     ],
     "modules-center": [],
     "modules-right": [
-        "custom/cava",
         "pulseaudio",
-        "bluetooth",
-        "custom/lighting",
-        "battery",
-        "custom/notifications",
+        "custom/battery",
         "power-profiles-daemon",
-        "custom/sysinfo",
+        "custom/vpn",
+        "custom/claude",
+        "custom/ledger",
         "clock",
+        "custom/record",
+        "custom/record-pause",
+        "custom/record-stop",
+        "custom/messages",
+        "custom/messages-badge",
+        "custom/notifications",
+        "custom/notifications-badge",
         "tray",
         "custom/power"
     ],
@@ -31,6 +36,8 @@
      "hyprland/workspaces": {
          "disable-scroll": true,
          "all-outputs": true,
+         // Hide HDMI-A-1's split workspaces (11+). Laptop never exceeds 10.
+         "ignore-workspaces": ["^(1[1-9]|[2-9][0-9])$"],
          "warp-on-scroll": false,
          "format": "{name}",
          "format-icons": {
@@ -53,36 +60,105 @@
             "unlocked": ""
         }
     },
-        "custom/cava": {
-        "exec": "$HOME/.config/waybar/cava.sh",
-        "format": "{}",
-        "tooltip": false
+    "custom/messages": {
+        "format": "\uf4ad",
+        "tooltip-format": "Messages",
+        "on-click": "$HOME/.local/bin/messages toggle"
     },
-    "custom/sysinfo": {
-        "exec": "$HOME/.config/waybar/sysinfo.sh",
-        "interval": 3,
+    "custom/messages-badge": {
+        "exec": "$HOME/.local/bin/messages watch",
         "return-type": "json",
-        "format": " {}",
-        "on-click": "kitty -e htop"
+        "on-click": "$HOME/.local/bin/messages toggle"
     },
-    "custom/lighting": {
-        "exec": "$HOME/.config/waybar/lighting.sh",
+    "custom/claude": {
+        "exec": "$HOME/.config/waybar/claude.sh",
+        "return-type": "json",
+        "format": "{}",
+        "tooltip": false,
+        "restart-interval": 1,
+        "on-click": "$HOME/.config/waybar/claude-menu.py",
+        "on-scroll-up": "$HOME/.config/waybar/claude.sh next",
+        "on-scroll-down": "$HOME/.config/waybar/claude.sh next"
+    },
+    "custom/record": {
+        "exec": "$HOME/.local/bin/record-ctl status",
         "interval": 1,
         "return-type": "json",
-        "format": "{}"
+        "signal": 10,
+        "format": "{}",
+        "menu": "on-click",
+        "menu-file": "$($HOME/.local/bin/tools-menu)",
+        "menu-actions": {
+            "open_last": "$HOME/.local/bin/record-ctl open-last",
+            "open_last_shot": "$HOME/.local/bin/record-ctl open-last-shot",
+            "clip_toggle": "$HOME/.local/bin/record-ctl clip-toggle",
+            "video_region": "$HOME/.local/bin/record-ctl start video region",
+            "video_full": "$HOME/.local/bin/record-ctl start video full",
+            "gif_region": "$HOME/.local/bin/record-ctl start gif region",
+            "gif_full": "$HOME/.local/bin/record-ctl start gif full",
+            "open_received": "$HOME/.local/bin/kdeshare received",
+            "phone_clip": "$HOME/.local/bin/kdeshare clipboard phone",
+            "pc_clip": "$HOME/.local/bin/kdeshare clipboard pc",
+            "phone_files": "$HOME/.local/bin/kdeshare files phone",
+            "pc_files": "$HOME/.local/bin/kdeshare files pc",
+            "phone_browse": "$HOME/.local/bin/kdeshare browse phone",
+            "pc_browse": "$HOME/.local/bin/kdeshare browse pc"
+        }
+    },
+    "custom/record-pause": {
+        "exec": "$HOME/.local/bin/record-ctl status pause",
+        "interval": 1,
+        "return-type": "json",
+        "signal": 10,
+        "format": "{}",
+        "on-click": "$HOME/.local/bin/record-ctl pause"
+    },
+    "custom/record-stop": {
+        "exec": "$HOME/.local/bin/record-ctl status stop",
+        "interval": 1,
+        "return-type": "json",
+        "signal": 10,
+        "format": "{}",
+        "on-click": "$HOME/.local/bin/record-ctl stop"
+    },
+    "custom/vpn": {
+        "exec": "$HOME/.config/waybar/vpn.sh",
+        "interval": 3,
+        "return-type": "json",
+        "signal": 11,
+        "format": "{}",
+        "on-click": "$HOME/.config/waybar/vpn.sh toggle",
+        "on-click-right": "$HOME/.config/waybar/vpn.sh check"
+    },
+    "custom/ledger": {
+        "exec": "$HOME/.config/waybar/ledger-timer.sh",
+        "interval": 1,
+        "return-type": "json",
+        "signal": 9,
+        "format": "{}",
+        "on-click": "$HOME/.config/waybar/claude-menu.py $HOME/.config/waybar/ledger-timer.sh ${XDG_RUNTIME_DIR:-/tmp}/ledger",
+        "on-click-middle": "$HOME/.config/waybar/ledger-timer.sh toggle && pkill -RTMIN+9 waybar",
+        "on-scroll-up": "$HOME/.config/waybar/ledger-timer.sh next && pkill -RTMIN+9 waybar",
+        "on-scroll-down": "$HOME/.config/waybar/ledger-timer.sh next && pkill -RTMIN+9 waybar"
+    },
+    "custom/notifications-badge": {
+        "exec": "$HOME/.local/bin/notifications-badge",
+        "return-type": "json",
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw"
     },
     "custom/notifications": {
         "exec": "swaync-client -swb 2>/dev/null",
         "return-type": "json",
         "format": "{icon}",
         "format-icons": {
-            "notification":               " <span foreground='#f53c3c'>•</span>",
+            "notification":               "",
             "none":                       "",
-            "dnd-notification":           " <span foreground='#f53c3c'>•</span>",
+            "dnd-notification":           "",
             "dnd-none":                   "",
-            "inhibited-notification":     " <span foreground='#f53c3c'>•</span>",
+            "inhibited-notification":     "",
             "inhibited-none":             "",
-            "dnd-inhibited-notification": " <span foreground='#f53c3c'>•</span>",
+            "dnd-inhibited-notification": "",
             "dnd-inhibited-none":         ""
         },
         "tooltip-format": "Notifications",
@@ -187,23 +263,6 @@
         "format": "{percent}% {icon}",
         "format-icons": ["", "", "", "", "", "", "", "", ""]
     },
-    "battery": {
-        "states": {
-            "good": 90,
-            "warning": 30,
-            "critical": 15
-        },
-        "format": "{capacity}% {icon}",
-        "format-full": "{capacity}% {icon}",
-        "format-charging": "{capacity}% ",
-        "format-plugged": "{capacity}% ",
-        "format-alt": "{time} {icon}",
-        "format-time": "{H}hr {m}min",
-        "interval": 30,
-        // "format-good": "", // An empty format will hide the module
-        // "format-full": "",
-        "format-icons": ["", "", "", "", ""]
-    },
     "battery#bat2": {
         "bat": "BAT2"
     },
@@ -236,12 +295,12 @@
     },
     "pulseaudio": {
         // "scroll-step": 1, // %, can be a float
-        "format": "{volume}% {icon} {format_source}",
-        "format-bluetooth": "{volume}% {icon} {format_source}",
-        "format-bluetooth-muted": " {icon}",
-        "format-muted": "",
-        "format-source": "{volume}% ",
-        "format-source-muted": "",
+        "format": "{icon} {volume}%{format_source}",
+        "format-bluetooth": "{icon} {volume}%{format_source}",
+        "format-bluetooth-muted": " {icon}{format_source}",
+        "format-muted": "{format_source}",
+        "format-source": "",
+        "format-source-muted": " <span color='#f53c3c'></span>",
         "format-icons": {
             "headphone": "",
             "hands-free": "",
@@ -251,7 +310,10 @@
             "car": "",
             "default": ["", "", ""]
         },
-        "on-click": "pavucontrol"
+        // Mic only shows when muted; its level lives in the tooltip.
+        "tooltip-format": "{desc}\nVolume {volume}%\nMic {source_volume}%",
+        "on-click": "pavucontrol",
+        "on-click-right": "pactl set-source-mute @DEFAULT_SOURCE@ toggle"
     },
     "pulseaudio/slider": {
         "min": 0,
@@ -270,13 +332,21 @@
         "exec": "$HOME/.config/waybar/mediaplayer.py 2> /dev/null" // Script in resources folder
         // "exec": "$HOME/.config/waybar/mediaplayer.py --player spotify 2> /dev/null" // Filter player based on name
     },
+    "custom/battery": {
+        "exec": "$HOME/.config/waybar/battery.sh",
+        "return-type": "json",
+        "interval": 10
+    },
     "custom/power": {
-        "format" : "",
-		"tooltip": false,
+        "format": "{}",
+        "exec": "$HOME/.config/waybar/sysinfo.sh", // hover tooltip = system stats
+        "return-type": "json",
+        "interval": 3,
 		"menu": "on-click",
 		"menu-file": "$HOME/.config/waybar/power_menu.xml", // Menu file in resources folder
 		"menu-actions": {
-            "logout": "hyprctl dispatch exit",
+            "sysmon": "kitty -e htop",
+            "logout": "fusermount -uz $HOME/dev/omcor; hyprctl dispatch exit", // lock omcor vault on logout
 			"shutdown": "shutdown now",
 			"reboot": "reboot",
 			"suspend": "systemctl suspend",

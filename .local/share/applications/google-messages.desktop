@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Messages
+Comment=Google Messages for web (SMS, MMS, RCS from phone)
+Exec=sh -c "\\$HOME/.local/bin/messages toggle"
+Icon=message
+Categories=Network;Chat;
+StartupWMClass=chrome-messages.google.com__web_conversations-Default

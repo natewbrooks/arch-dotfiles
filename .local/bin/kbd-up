@@ -1,0 +1,11 @@
+#!/bin/bash
+
+KBD="/sys/class/leds/asus::kbd_backlight/brightness"
+MAX=$(cat /sys/class/leds/asus::kbd_backlight/max_brightness)
+cur=$(cat "$KBD")
+
+if [ "$cur" -lt "$MAX" ]; then
+  echo $((cur + 1)) | tee "$KBD" >/dev/null
+else
+  echo "$MAX" | tee "$KBD" >/dev/null
+fi

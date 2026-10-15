@@ -1,0 +1,798 @@
+#!/usr/bin/env bash
+# Concurrent multi-model code review. One tmux session and one output dir per
+# repo+branch. `review-all help` for the full table.
+set -uo pipefail
+
+# Colored help. Honors NO_COLOR, and drops color when piped.
+usage() {
+  local R='' B='' D='' H='' K='' V=''
+  if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    R=$'\e[0m'; B=$'\e[1m'; D=$'\e[2m'; H=$'\e[1;36m'; K=$'\e[33m'; V=$'\e[32m'
+  fi
+  local row="  ${K}%-8s${R}  ${V}%-8s${R}  %s\n"
+  local cont="  %-8s  %-8s  ${D}%s${R}\n"
+
+  printf '\n%s\n' "${B}review-all${R} ${D}- concurrent multi-model code review${R}"
+  printf '%s\n\n' "${D}fable + opus + codex review the branch in parallel, then opus synthesizes${R}"
+
+  printf '%s\n' "${H}USAGE${R}"
+  printf '  %s\n\n' "${B}review-all${R} [MODE] [SWEEP] [FLAGS]"
+
+  printf '%s\n' "${H}MODE${R}"
+  printf "$row" "all"     "default" "stage 1 (fable+opus+codex), then synthesis"
+  printf "$row" "synth"   ""        "skip stage 1, re-synthesize from this branch's"
+  printf "$cont" ""       ""        "existing fable.md opus.md codex.md"
+  printf "$row" "session" ""        "list every live review across branches"
+  printf "$cont" ""       ""        "review-all session 2   jump into that one's menu"
+  printf "$row" "watch"   ""        "menu hub for THIS branch's review"
+  printf "$cont" ""       ""        "1 = driver's live progress line, or a log window,"
+  printf "$cont" ""       ""        "or resume:<stage> for that agent's native TUI"
+  printf "$row" "resume"  ""        "straight into one stage's native TUI"
+  printf "$cont" ""       ""        "review-all resume opus"
+  printf "$row" "wait"    ""        "block until this branch's review ends. exit 2 = still"
+  printf "$cont" ""       ""        "running after 570s (review-all wait SECS), call again"
+  printf "$row" "cancel"  ""        "kill this branch's review"
+  printf "$cont" ""       ""        "review-all cancel all   kills every branch's"
+  printf "$row" "help"    ""        "this table (-h, --help)"
+  echo
+
+  printf '%s\n' "${H}SWEEP${R}  ${D}who runs the exhaustive /code-review sweep with subagents${R}"
+  printf "$row" "fable"   "default" "fable deep, opus light (effort low)"
+  printf "$row" "opus"    ""        "swapped: opus deep, fable light"
+  printf "$row" "both"    ""        "both models deep"
+  printf "$row" "none"    ""        "both light, cheapest"
+  printf "$cont" ""       ""        "codex always runs ~/.codex/prompts/code-review.md"
+  echo
+
+  printf '%s\n' "${H}FLAGS${R}"
+  local frow="  ${K}%-12s${R}  %s\n" fcont="  %-12s  ${D}%s${R}\n"
+  printf "$frow" "--fast"      "fable deep at high effort, 1 round, single-pass synthesis"
+  printf "$frow" "--comments"  "after synthesis append the drafted comments to comments.md as Round N. local only, nothing touches GitHub"
+  printf "$frow" "--stage"     "with --comments: also stage comments.json as a PENDING PR review on GitHub"
+  printf "$fcont" ""           "nothing is submitted or visible to others until you press submit"
+  printf "$frow" "--no-synth"  "stage 1 only, read fable/opus/codex.md yourself"
+  printf "$frow" "--skip M"    "drop a model: fable|opus|codex (repeatable)"
+  printf "$frow" "--base REF"  "diff against REF (default origin/<default branch>, stacked branches need this)"
+  printf "$frow" "--pr N"      "review GitHub PR N instead of the local branch"
+  printf "$frow" "--effort E"  "deep + synthesis effort: low|medium|high|max (default high)"
+  printf "$frow" "--rounds N"  "max /code-review Phase 4 rounds (default 2)"
+  printf "$frow" "--lenses L"  "only these lens groups, comma list: correctness,server,client,"
+  printf "$fcont" ""           "regression,simplicity,contract,ownership"
+  printf "$frow" "--detach"    "start the review without attaching. the /review-all claude command uses this"
+  printf "$frow" "--pause-timer" "pause the GoPanda Ledger timer when the review ends, however it ends"
+  printf "$fcont" ""           "success, failure, or cancel. No-op if the timer is not running"
+  printf "$fcont" ""           "env equivalents: RA_EFFORT RA_ROUNDS RA_LENSES"
+  printf "$fcont" ""           "diffs under 50 lines auto-drop to SWEEP=none (both light) unless SWEEP given"
+  printf "$fcont" ""           "docs-only diffs (every file .md or under docs/, e.g. an ERD) run a document review on every"
+  printf "$fcont" ""           "stage instead: claims traced to code, side effects, gaps. never auto-dropped, --lenses ignored"
+  echo
+
+  printf '%s\n' "${H}GUARDRAILS${R}  ${D}what this command will never do${R}"
+  printf '  %s\n' "never pushes. git fetch only, then fast-forward YOUR branch only when it is strictly behind"
+  printf '  %s\n' "  origin and the tree is clean. diverged, dirty, or ahead = warn and review local as is"
+  printf '  %s\n' "never writes to main or any other branch, never commits, never changes git state"
+  printf '  %s\n' "never edits code. every agent is told read-only, codex runs in its read-only sandbox,"
+  printf '  %s\n' "  the only files written are under .review-all/ (kept out of git via .git/info/exclude)"
+  printf '  %s\n' "never posts to GitHub. PR, issues, epic, threads, and your own draft are read with GET and"
+  printf '  %s\n' "  GraphQL queries only. agents are told: no gh pr review, no gh pr comment, no POST/PUT/PATCH/DELETE"
+  printf '  %s\n' "--comments writes local files only. --stage is the single opt-in that touches GitHub, and it"
+  printf '  %s\n' "  stages a PENDING review only: no event field, so nothing is submitted, nobody else can see"
+  printf '  %s\n' "  it, no notification goes out. an existing pending draft is extended, never submitted."
+  printf '  %s\n' "  YOU press submit in the GitHub UI, or delete the draft"
+  printf '  %s\n' "never re-raises a thread the author answered unless the code proves the answer wrong"
+  printf '  %s\n' "cites lines from HEAD and warns when the PR head differs from local HEAD"
+  printf '  %s\n' "--pause-timer fires on every exit: success, failure, cancel. start, end, elapsed, and how"
+  printf '  %s\n' "  it ended are appended to review.md regardless, for the timesheet"
+  echo
+
+  printf '%s\n' "${H}OUTPUT${R}"
+  printf '  %s\n' "${D}.review-all/<branch>/${R} map.md diff.patch pr.md fable.md opus.md codex.md ${B}review.md${R} comments.md"
+  printf '  %s\n\n' "${D}runs inside tmux, so closing the terminal does not kill it${R}"
+
+  printf '%s\n' "${H}EXAMPLES${R}"
+  local ex="  ${B}%-32s${R} ${D}%s${R}\n"
+  printf "$ex" "review-all"                      "review current branch, fable deep"
+  printf "$ex" "review-all --fast --comments"    "quickest useful run, plus local comment drafts"
+  printf "$ex" "review-all all both"             "both models deep, most thorough"
+  printf "$ex" "review-all --pr 123 --comments --stage" "review a PR, stage a pending review on it"
+  printf "$ex" "review-all watch"                "reattach after closing the terminal"
+  printf "$ex" "review-all session"              "switch between branches' reviews"
+  printf "$ex" "review-all synth"                "redo synthesis only"
+  printf "$ex" "review-all all both --pause-timer" "pause the Ledger timer when done"
+  echo
+}
+
+if [[ "${1:-}" =~ ^(help|-h|--help)$ ]]; then usage; exit 0; fi
+
+command -v tmux >/dev/null || { echo "tmux required" >&2; exit 1; }
+
+# --- identity: one session and one output dir per repo+branch --------------------
+slug() { local x="${1//[^a-zA-Z0-9]/-}"; echo "${x:-none}"; }
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [[ -n "$ROOT" ]]; then
+  REPO=$(basename "$ROOT")
+  BRANCH=$(git branch --show-current)
+  BASE=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|origin/||')
+  BASE=${BASE:-main}
+  SESSION="ra-$(slug "$REPO")-$(slug "$BRANCH")"
+  OUT="$ROOT/.review-all/$(slug "$BRANCH")"
+  export RA_RUN="$(slug "$REPO")/$(slug "$BRANCH")"  # groups the stages into one waybar row
+  case "$REPO" in
+    *server*) CTX=server ;;
+    *mobile*) CTX=mobile ;;
+    *client*) CTX=web ;;
+    *) CTX=unknown ;;
+  esac
+else
+  REPO= BRANCH= BASE=main SESSION= OUT= CTX=unknown
+fi
+need_repo() { [[ -n "$ROOT" ]] || { echo "not a git repo - run from a repo, or use 'review-all session'" >&2; exit 1; }; }
+
+# attach, or switch if already inside tmux. -d takes the session over from the
+# terminal that launched it: tmux sizes a session to its smallest client, so a stale
+# attached client renders the window blank or clipped in the new one
+att() { [[ -n "${TMUX:-}" ]] && tmux switch-client -t "$1" || tmux attach -d -t "$1"; }
+
+# live tail for one stage. codex writes a plain log, the claude stages write stream-json
+VIEW='select(.type=="assistant") | .message.content[]? | if .type=="text" then .text elif .type=="tool_use" then "[\(.name)] \((.input|tostring)[0:160])" else empty end'
+tailcmd() {
+  case "$1" in
+    codex) echo "touch '$OUT/codex.log'; tail -f '$OUT/codex.log'" ;;
+    *)     echo "touch '$OUT/$1.jsonl'; tail -f '$OUT/$1.jsonl' | jq -r --unbuffered '$VIEW'" ;;
+  esac
+}
+
+# Open one stage in the native claude/codex TUI. The stages run headless (`claude -p`,
+# `codex exec`), so the log windows only tail their output - this re-enters the real
+# session, with full history, and you can talk to it. Returns when you exit the TUI.
+resume_stage() {
+  local sid f=$1
+  # the comments stage keeps comments.md/json for the drafted comments, its run artifacts are comments.run.*
+  [[ $f == comments ]] && f=comments.run
+  # `review-all session` can run outside the repo, so recover the root from $OUT
+  local root="${ROOT:-${OUT%/.review-all/*}}"
+  case "$1" in
+    fable|opus|review|comments)
+      # the final result event is authoritative; fall back to the stream while it is mid-run
+      sid=$(jq -r '.session_id? // empty' "$OUT/$f.json" 2>/dev/null | head -1)
+      [[ -n "$sid" ]] || sid=$(jq -r '.session_id? // empty' "$OUT/$f.jsonl" 2>/dev/null | head -1)
+      [[ -n "$sid" ]] || { echo "no session id in $OUT/$f.jsonl yet - stage has not started"; read -rsn1 -p "enter to go back"; return 1; }
+      # claude scopes sessions by cwd, so resume from the repo root the stage ran in
+      # or --resume silently opens a blank new session instead
+      ( cd "$root" && claude --resume "$sid" ) || { echo "resume failed for $1 (sid $sid)"; read -rsn1 -p "enter to go back"; } ;;
+    codex) ( cd "$root" && codex resume --last ) ;;
+    *) echo "unknown stage: $1 - want fable|opus|review|comments|codex" >&2; return 1 ;;
+  esac
+}
+
+# The hub. Every surface returns here: Ctrl-C out of a log, or exit a native TUI.
+watch_menu() {
+  # without this the Ctrl-C that stops an inline tail kills the menu too
+  trap : INT
+  local w wins opts st
+  while :; do
+    mapfile -t wins < <(tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null)
+    [[ ${#wins[@]} -gt 0 ]] || { echo "review ended: $SESSION"; return 0; }
+    # driver holds the live progress line (elapsed + per-model cost), so it is option 1
+    mapfile -t wins < <(printf '%s\n' "${wins[@]}" | grep -x driver; printf '%s\n' "${wins[@]}" | grep -vx driver)
+    opts=()
+    for st in "${wins[@]}"; do [[ "$st" == all || "$st" == driver ]] || opts+=("resume:$st"); done
+    echo
+    echo "$SESSION - pick a context (driver = live progress). Ctrl-C (log) or exit (native TUI) comes back here."
+    select w in "${wins[@]}" "${opts[@]}" quit; do
+      case "$w" in
+        ""|quit)  return 0 ;;
+        resume:*) resume_stage "${w#resume:}" ;;
+        # driver and all are live panes owned by the session, so they need a real switch.
+        # Inside tmux that is switch-client, which does not block - the menu would keep
+        # eating keystrokes from a window you can no longer see, so end it here instead.
+        driver|all) att "$SESSION:$w"; [[ -n "${TMUX:-}" ]] && return 0 ;;
+        # every other window just tails a file. Run that tail in this pane rather than
+        # switching windows: the menu stays put and Ctrl-C comes straight back to it
+        *)        echo "tailing $w - Ctrl-C returns to the menu"
+                  sh -c "$(tailcmd "$w")" ;;
+      esac
+      break
+    done
+  done
+}
+
+# --- subcommands ----------------------------------------------------------------
+if [[ "${1:-}" == "session" ]]; then
+  mapfile -t SESS < <(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^ra-' | sort)
+  [[ ${#SESS[@]} -gt 0 ]] || { echo "no reviews running"; exit 0; }
+  pick="${2:-}"
+  if [[ -z "$pick" ]]; then
+    echo "live reviews:"
+    for i in "${!SESS[@]}"; do
+      printf '  %d  %-40s %s%s\n' $((i+1)) "${SESS[$i]}" \
+        "$(tmux show-environment -t "${SESS[$i]}" RA_LABEL 2>/dev/null | cut -d= -f2-)" \
+        "$(tmux show-environment -t "${SESS[$i]}" RA_DONE >/dev/null 2>&1 && echo ' (done)')"
+    done
+    read -rp "number (enter to quit): " pick
+    [[ -n "$pick" ]] || exit 0
+  fi
+  if [[ "$pick" =~ ^[0-9]+$ ]]; then
+    SESSION="${SESS[$((pick-1))]:-}"
+  else
+    SESSION="$pick"
+  fi
+  [[ -n "$SESSION" ]] && tmux has-session -t "$SESSION" 2>/dev/null || { echo "no such review: $pick" >&2; exit 1; }
+  OUT=$(tmux show-environment -t "$SESSION" RA_OUT 2>/dev/null | cut -d= -f2-)
+  watch_menu
+  exit 0
+fi
+
+if [[ "${1:-}" == "resume" ]]; then
+  need_repo
+  if [[ -n "${2:-}" ]]; then resume_stage "$2"; else claude --resume; fi
+  tmux has-session -t "$SESSION" 2>/dev/null && watch_menu
+  exit 0
+fi
+
+if [[ "${1:-}" == "watch" ]]; then
+  need_repo
+  tmux has-session -t "$SESSION" 2>/dev/null || { echo "no review for $BRANCH - start one, or 'review-all session'" >&2; exit 1; }
+  [[ -n "${2:-}" ]] && att "$SESSION:$2"
+  watch_menu
+  exit 0
+fi
+
+if [[ "${1:-}" == "wait" ]]; then
+  need_repo
+  # chunked so a caller with a command timeout (the /review-all claude command) can loop on exit 2
+  end=$(( SECONDS + ${2:-570} ))
+  while tmux has-session -t "$SESSION" 2>/dev/null && ! tmux show-environment -t "$SESSION" RA_DONE >/dev/null 2>&1; do
+    (( SECONDS < end )) || { echo "still running: $SESSION"; exit 2; }
+    sleep 5
+  done
+  # the driver's closing lines: timings, warnings, token totals
+  tmux capture-pane -p -t "$SESSION:driver" 2>/dev/null | grep -v '^$' | tail -20
+  echo "review ended: $OUT/review.md"
+  exit 0
+fi
+
+if [[ "${1:-}" == "cancel" ]]; then
+  # every stage runs inside the session, so killing it hangs up the whole tree
+  if [[ "${2:-}" == "all" ]]; then
+    tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^ra-' | xargs -r -n1 tmux kill-session -t
+    sleep 2
+    pkill -9 -f "claude -p --dangerously-skip-permissions" 2>/dev/null
+    echo "all reviews cancelled"
+  else
+    need_repo
+    tmux kill-session -t "$SESSION" 2>/dev/null && echo "cancelled $SESSION" || echo "no review for $BRANCH"
+  fi
+  exit 0
+fi
+
+# --- run ------------------------------------------------------------------------
+need_repo
+ORIG=("$@")
+PAUSE=${RA_PAUSE:-}
+EFFORT=${RA_EFFORT:-high}
+ROUNDS=${RA_ROUNDS:-2}
+LENSES=${RA_LENSES:-}
+PR= SKIP=, FAST= NOSYNTH= COMMENT= STAGE= DETACH= EFFORT_SET=${RA_EFFORT:+1}
+POS=()
+val() { [[ -n "${2:-}" && "${2:-}" != --* ]] || { echo "$1 needs a value" >&2; exit 1; }; }
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    pause-timer|--pause-timer) PAUSE=1 ;;
+    --base)      val "$@"; BASE=$2; shift ;;
+    --pr)        val "$@"; PR=$2; shift ;;
+    --skip)      val "$@"; SKIP="$SKIP$2," ; shift ;;
+    --effort)    val "$@"; EFFORT=$2 EFFORT_SET=1; shift ;;
+    --rounds)    val "$@"; ROUNDS=$2; shift ;;
+    --lenses)    val "$@"; LENSES=$2; shift ;;
+    --fast)      FAST=1 ;;
+    --no-synth)  NOSYNTH=1 ;;
+    --comments)  COMMENT=1 ;;
+    --stage)     STAGE=1 ;;
+    --detach)    DETACH=1 ;;
+    --*)         echo "unknown flag: $1 - run 'review-all help'" >&2; exit 1 ;;
+    *)           POS+=("$1") ;;
+  esac
+  shift
+done
+# synth = skip stage 1, only run the final synthesis against existing fable/opus/codex .md files
+MODE_ARG="${POS[0]:-all}"
+case "$MODE_ARG" in all|synth) ;; *) echo "unknown MODE: $MODE_ARG - run 'review-all help'" >&2; exit 1 ;; esac
+# which model runs the exhaustive /code-review sweep with subagents: fable | opus | both | none.
+# The other model gets the cheap single-pass scoped review instead.
+SWEEP="${POS[1]:-}"
+if [[ -n "$FAST" ]]; then SWEEP=${SWEEP:-fable}; [[ -n "$EFFORT_SET" ]] || EFFORT=high; ROUNDS=1; fi
+# Fresh refs before anything is measured. fetch only updates remote-tracking refs, it never
+# pushes. The branch is fast-forwarded only when it is strictly behind and the tree is clean,
+# anything else is left alone with a warning. Outer call only, the driver inherits the result.
+if [[ -z "${RA_INNER:-}" ]]; then
+  git fetch -q origin || echo "warning: git fetch failed, reviewing against stale refs" >&2
+  # sibling repos too, refs only: the agents compare against their origin/main and may not fetch
+  for s in server client mobile; do
+    [[ "$ROOT/../galaxy-bids-$s" -ef "$ROOT" ]] || git -C "$ROOT/../galaxy-bids-$s" fetch -q origin 2>/dev/null
+  done
+  if [[ -n "$BRANCH" ]] && git rev-parse -q --verify "origin/$BRANCH" >/dev/null 2>&1; then
+    L=$(git rev-parse HEAD) R=$(git rev-parse "origin/$BRANCH")
+    if [[ "$L" != "$R" ]]; then
+      if git merge-base --is-ancestor "$L" "$R" && [[ -z "$(git status --porcelain)" ]]; then
+        git merge -q --ff-only "origin/$BRANCH" && echo "fast-forwarded $BRANCH to origin (${R:0:7})"
+      elif git merge-base --is-ancestor "$R" "$L"; then
+        echo "warning: local $BRANCH is ahead of origin by $(git rev-list --count "$R..$L") commit(s), reviewing local (unpushed work included)" >&2
+      else
+        echo "warning: local $BRANCH and origin/$BRANCH differ and could not fast-forward (diverged or dirty tree), reviewing local HEAD $(git rev-parse --short HEAD)" >&2
+      fi
+    fi
+  fi
+fi
+# local main goes stale between fetches, and a stale base drags other people's merged
+# work into the diff. Prefer the remote-tracking ref when it exists.
+if [[ "$BASE" != */* ]] && git rev-parse -q --verify "origin/$BASE" >/dev/null 2>&1; then BASE="origin/$BASE"; fi
+git rev-parse -q --verify "$BASE^{commit}" >/dev/null 2>&1 || { echo "base ref not found: $BASE - git fetch, or pass --base" >&2; exit 1; }
+case "$EFFORT" in low|medium|high|max) ;; *) echo "unknown effort: $EFFORT" >&2; exit 1 ;; esac
+# docs-only diff (ERDs, design docs): nothing for the code lenses to hold, so every stage runs
+# the document review instead. Never auto-dropped to light: a short ERD edit can move a lot of code.
+if [[ -n "$PR" ]]; then CHANGED=$(gh pr view "$PR" --json files -q '.files[].path'); else CHANGED=$(git diff --name-only "$BASE...HEAD"); fi
+DOCS=; [[ -n "$CHANGED" ]] && ! grep -qvE '(^|/)docs/|\.mdx?$' <<<"$CHANGED" && DOCS=1
+# tiny diff: the exhaustive sweep costs $30+ and finds nothing a light pass misses
+if [[ -z "$SWEEP" && -z "$PR" && -z "$DOCS" ]]; then
+  DIFF_LINES=$(git diff --numstat "$BASE...HEAD" 2>/dev/null | awk '{a+=$1+$2} END{print a+0}')
+  if (( DIFF_LINES < 50 )); then SWEEP=none; echo "diff is $DIFF_LINES lines - sweep=none (pass SWEEP to override)"; fi
+fi
+SWEEP=${SWEEP:-fable}
+case "$SWEEP" in
+  fable|opus|both|none) ;;
+  *) echo "unknown SWEEP: $SWEEP - run 'review-all help'" >&2; exit 1 ;;
+esac
+skip() { [[ ",$SKIP," == *",$1,"* ]]; }
+S1=(); for m in fable opus codex; do skip "$m" || S1+=("$m"); done
+[[ ${#S1[@]} -gt 0 || "$MODE_ARG" == synth ]] || { echo "every model skipped" >&2; exit 1; }
+STAGES=()
+[[ "$MODE_ARG" == synth ]] || STAGES+=("${S1[@]}")
+[[ -n "$NOSYNTH" ]] || STAGES+=(review)
+[[ -n "$COMMENT" ]] && STAGES+=(comments)
+[[ ${#STAGES[@]} -gt 0 ]] || { echo "nothing to run: synth + --no-synth without --comments" >&2; exit 1; }
+SKIP=${SKIP#,}; SKIP=${SKIP%,}
+mkdir -p "$OUT"
+# keep review output out of git without touching the repo's tracked .gitignore
+if ! git check-ignore -q .review-all 2>/dev/null; then
+  GITDIR=$(git rev-parse --git-dir)
+  mkdir -p "$GITDIR/info" && echo '.review-all/' >> "$GITDIR/info/exclude"
+fi
+
+# window "all" is the tiled overview, plus one full-screen window per stage
+mksession() {
+  tmux new-session -d -s "$SESSION" -c "$ROOT" -n all "$(tailcmd "$1")"
+  for st in "${@:2}"; do tmux split-window -t "$SESSION:all" -c "$ROOT" "$(tailcmd "$st")"; done
+  tmux select-layout -t "$SESSION:all" tiled >/dev/null
+  for st in "$@"; do tmux new-window -d -t "$SESSION" -c "$ROOT" -n "$st" "$(tailcmd "$st")"; done
+  tmux set-environment -t "$SESSION" RA_OUT "$OUT"
+  tmux set-environment -t "$SESSION" RA_LABEL "$REPO@$BRANCH"
+}
+
+# Outer call builds the session and runs the real work in its `driver` window, so
+# closing the terminal cannot kill the review. RA_INNER marks the driver itself.
+if [[ -z "${RA_INNER:-}" ]]; then
+  # the tail windows never exit, so a finished review's session lingers until someone
+  # closes it. RA_DONE marks the driver as exited: reap that session instead of refusing
+  if tmux has-session -t "$SESSION" 2>/dev/null; then
+    if tmux show-environment -t "$SESSION" RA_DONE >/dev/null 2>&1; then
+      tmux kill-session -t "$SESSION"
+    else
+      echo "review already running for $BRANCH - 'review-all watch', or 'review-all cancel' first" >&2; exit 1
+    fi
+  fi
+  mksession "${STAGES[@]}"
+  tmux new-window -d -t "$SESSION" -c "$ROOT" -n driver \
+    "RA_INNER=1 RA_PAUSE='$PAUSE' $(printf '%q ' "$0" "${ORIG[@]}"); tmux set-environment -t '$SESSION' RA_DONE 1; printf '\n[exited] enter to close '; read -r; tmux kill-session -t '$SESSION'"
+  echo "$SESSION started - outputs in $OUT"
+  [[ -n "$DETACH" ]] || att "$SESSION:driver"
+  exit 0
+fi
+
+# Pauses the GoPanda workspace timer against live state, whichever workspace is docked.
+# Verified from the module's own JSON, not the exit code: a missing token prints JSON and exits 0.
+LEDGER_WORKSPACE=f6b30020-5545-4a6c-b6d7-bda061c465db # GoPanda
+pause_timer() {
+  [[ -n "$PAUSE" ]] || return 0
+  local out delay
+  # backoff 5s 10s 20s 40s 80s 160s 320s, ~10 min total, then give up loudly
+  for delay in 5 10 20 40 80 160 320 0; do
+    out=$("$HOME/.config/waybar/ledger-timer.sh" pause "$LEDGER_WORKSPACE" 2>/dev/null) || out=""
+    if [[ $(jq -r '.class // empty' <<<"$out" 2>/dev/null) == @(paused|idle) ]]; then
+      pkill -RTMIN+9 waybar 2>/dev/null; echo "ledger timer paused"; return 0
+    fi
+    [[ "$out" == *"no token"* ]] && { echo "ledger timer NOT paused: no token in ~/.config/waybar/ledger-token" >&2; return 1; }
+    (( delay )) || break
+    echo "ledger pause failed, retry in ${delay}s" >&2
+    sleep "$delay"
+  done
+  echo "ledger timer NOT paused - pause it yourself" >&2
+  return 1
+}
+# Wall clock for the timesheet, kept locally in case pause_timer fails. Appended on every exit.
+STARTED=$(date '+%Y-%m-%d %H:%M:%S %Z'); START_S=$(date +%s)
+log_time() {
+  local end_s; end_s=$(date +%s); local el=$(( end_s - START_S ))
+  {
+    echo; echo "## Timing"
+    echo "- started: $STARTED"
+    echo "- ended:   $(date '+%Y-%m-%d %H:%M:%S %Z') ($1)"
+    printf -- '- elapsed: %02dh %02dm %02ds\n' $((el/3600)) $((el%3600/60)) $((el%60))
+    echo "- args: review-all ${ORIG[*]}"
+  } >> "$OUT/review.md"
+}
+trap 'rc=$?; kill ${TICK:-} 2>/dev/null; rm -f "${MODE:-}"; log_time "$([[ $rc -eq 0 ]] && echo "finished ok" || echo "failed, exit $rc, see the .log files")"; pause_timer' EXIT
+# a killed session (review-all cancel, tmux server gone) must still reach the EXIT trap
+trap 'trap - EXIT; rc=129; kill ${TICK:-} 2>/dev/null; rm -f "${MODE:-}"; log_time "cancelled by review-all cancel or tmux hangup"; pause_timer; exit 129' HUP
+trap 'trap - EXIT; rc=143; kill ${TICK:-} 2>/dev/null; rm -f "${MODE:-}"; log_time "killed by SIGTERM"; pause_timer; exit 143' TERM
+
+PLUG=$HOME/.claude/plugins/cache
+CAVEMAN=$(ls -d "$PLUG"/caveman/caveman/*/skills/caveman/SKILL.md | head -1)
+# caveman only: it cuts output tokens. ponytail is a builder mindset and biases reviewers
+# toward "delete this" nits the synthesis then has to refute - lenses 19/20 cover simplicity.
+MODE=$(mktemp)
+{
+  echo "# CAVEMAN MODE ACTIVE - level: ultra. No exceptions."
+  cat "$CAVEMAN"
+  echo
+  echo "Ultra for this entire session. Never revert."
+} > "$MODE"
+
+# Phase 0/1.5 inputs every model would otherwise rebuild: diff, commits, files, authors per file
+map() {
+  local range="$BASE...HEAD" files
+  if [[ -n "$PR" ]]; then
+    gh pr diff "$PR" > "$OUT/diff.patch" || return 1
+    files=$(gh pr view "$PR" --json files -q '.files[].path')
+  else
+    git diff "$range" > "$OUT/diff.patch"
+    files=$(git diff --name-only "$range")
+  fi
+  if [[ -n "$PR" ]]; then
+    local prsha; prsha=$(gh pr view "$PR" --json headRefOid -q .headRefOid)
+    [[ "$prsha" == "$(git rev-parse HEAD)" ]] || echo "warning: PR #$PR head ${prsha:0:7} != local HEAD $(git rev-parse --short HEAD) - line numbers will drift, check out the PR branch" >&2
+  fi
+  {
+    echo "# Precomputed map: repo=$REPO branch=$BRANCH base=$BASE head=$(git rev-parse --short HEAD) pr=${PR:-none}"
+    echo; echo "## Commits"
+    if [[ -n "$PR" ]]; then gh pr view "$PR" --json commits -q '.commits[] | "\(.oid[0:7]) \(.messageHeadline)"'; else git log --oneline "$BASE..HEAD"; fi
+    echo; echo "## Files (+ - path)"
+    if [[ -n "$PR" ]]; then gh pr view "$PR" --json files -q '.files[] | "\(.additions)\t\(.deletions)\t\(.path)"'; else git diff --numstat "$range"; fi
+    echo; echo "## Authors of touched files on $BASE (commits per author, top 3) - house-pattern owners"
+    while read -r f; do
+      [[ -n "$f" ]] || continue
+      printf '%s: ' "$f"
+      git log --format=%an "$BASE" -- "$f" 2>/dev/null | sort | uniq -c | sort -rn | head -3 | awk '{printf "%s(%s) ", $2, $1}'
+      echo
+    done <<< "$files"
+    echo; echo "## Full diff: $OUT/diff.patch"
+  } > "$OUT/map.md"
+}
+
+# Read-only snapshot of the PR: description, linked issue and its parent, commits with stats,
+# conversation, reviews, every inline thread with resolved/outdated state, and your own
+# unsubmitted pending draft. GET and GraphQL queries only. Sets PRN, PENDING_ID, PENDING_NODE.
+PRN= PENDING_ID= PENDING_NODE= NWO=
+pr_state() {
+  PRN=${PR:-$(gh pr view --json number -q .number 2>/dev/null)}
+  [[ -n "$PRN" ]] || { echo "# No PR for $BRANCH" > "$OUT/pr.md"; return 0; }
+  NWO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+  local o="${NWO%/*}" r="${NWO#*/}" me pr reviews threads
+  me=$(gh api graphql -f query='query{viewer{login}}' -q .data.viewer.login)
+  pr=$(gh pr view "$PRN" --json number,title,state,isDraft,reviewDecision,updatedAt,author,baseRefName,headRefOid,body,labels,milestone,closingIssuesReferences,commits,comments)
+  reviews=$(gh api "repos/$NWO/pulls/$PRN/reviews" --paginate)
+  threads=$(gh api graphql --paginate -f query='query($o:String!,$r:String!,$n:Int!,$c:String){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100,after:$c){pageInfo{hasNextPage endCursor} nodes{isResolved isOutdated path line originalLine comments(first:50){nodes{author{login} body createdAt}}}}}}}' -F o="$o" -F r="$r" -F n="$PRN" -q '.data.repository.pullRequest.reviewThreads.nodes[]' | jq -s .)
+  PENDING_ID=$(jq -r --arg me "$me" '[.[] | select(.state=="PENDING" and .user.login==$me)][0].id // empty' <<<"$reviews")
+  PENDING_NODE=$(jq -r --arg me "$me" '[.[] | select(.state=="PENDING" and .user.login==$me)][0].node_id // empty' <<<"$reviews")
+  {
+    jq -r '"# PR #\(.number): \(.title)\n- state: \(.state)\(if .isDraft then " (draft)" else "" end), review decision: \(.reviewDecision // "none"), updated: \(.updatedAt)\n- author: \(.author.login), base: \(.baseRefName), head: \(.headRefOid[0:7])\n- labels: \([.labels[].name] | join(", "))\(if .milestone then ", milestone: \(.milestone.title)" else "" end)\n\n## Description (as of \(.updatedAt))\n\(.body // "(empty)")"' <<<"$pr"
+    echo; echo "## Linked issues (from the PR body, may live in another repo)"
+    jq -r '.closingIssuesReferences[] | "\(.repository.owner.login)/\(.repository.name) \(.number)"' <<<"$pr" | while read -r io in; do
+      [[ -n "$in" ]] || continue
+      gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){issue(number:$n){number title state body parent{number title state body subIssues(first:50){nodes{number title state}}}}}}' \
+        -F o="${io%/*}" -F r="${io#*/}" -F n="$in" -q '.data.repository.issue | "### \(.number): \(.title) [\(.state)]\n\(.body // "")\n" + (if .parent then "\n### Parent (epic) \(.parent.number): \(.parent.title) [\(.parent.state)]\n\(.parent.body // "")\n\nSibling tickets in the epic:\n" + ([.parent.subIssues.nodes[] | "- \(.number) \(.title) [\(.state)]"] | join("\n")) else "\n(no parent issue)" end)' 2>/dev/null \
+        || echo "### $io#$in (could not read)"
+    done
+    echo; echo "## Commits, oldest first, with what each changed"
+    jq -r '.commits[] | "\(.oid) \(.authoredDate[0:10]) \(.messageHeadline)"' <<<"$pr" | while read -r oid d msg; do
+      echo "- ${oid:0:7} $d $msg"
+      git show --stat=100 --format= "$oid" 2>/dev/null | sed 's/^/    /' || echo "    (not in local clone, git fetch)"
+    done
+    echo; echo "## Conversation (PR comments)"
+    jq -r '.comments[] | "- \(.author.login) \(.createdAt[0:16]): \(.body)"' <<<"$pr"
+    echo; echo "## Reviews"
+    jq -r --arg me "$me" '.[] | "- \(.user.login) \(.state)\(if .state=="PENDING" and .user.login==$me then " (YOUR unsubmitted draft, invisible to everyone else)" else "" end) \(.submitted_at // "")\(if .body != "" then ": \(.body)" else "" end)"' <<<"$reviews"
+    echo; echo "## Inline review threads"
+    echo "resolved = the author marked it done, verify the fix actually landed. outdated = the lines changed since, check whether the change addressed it."
+    jq -r '.[] | "### \(.path):\(.line // .originalLine) [\(if .isResolved then "RESOLVED" else "UNRESOLVED" end)\(if .isOutdated then ", OUTDATED" else "" end)]\n" + ([.comments.nodes[] | "- \(.author.login) \(.createdAt[0:16]): \(.body)"] | join("\n"))' <<<"$threads"
+    if [[ -n "$PENDING_ID" ]]; then
+      echo; echo "## Your pending draft comments (unsubmitted, nobody else can see these)"
+      gh api "repos/$NWO/pulls/$PRN/reviews/$PENDING_ID/comments" --paginate -q '.[] | "- \(.path):\(.line // .original_line // "?"): \(.body)"'
+    fi
+  } > "$OUT/pr.md"
+}
+
+CONTEXT="Review context: repo=$REPO ($CTX), branch=$BRANCH, base=$BASE${PR:+, PR #$PR}.
+Sibling repos: ../galaxy-bids-server, ../galaxy-bids-client (web), ../galaxy-bids-mobile.
+Precomputed inputs: $OUT/map.md (commits, changed files, top authors per file), $OUT/diff.patch (full diff), and $OUT/pr.md (PR description, linked issue and parent epic, per-commit changes, conversation, reviews, every inline thread with resolved/outdated state, any unsubmitted draft). Read all three before forming an opinion. Use them for Phase 0 and 1.5 instead of regenerating. Still build 1.1-1.4 yourself.
+PR history rules: a change a reviewer already asked for must be verified as actually landed, resolved or not. Do not re-raise a thread the author answered unless the code proves the answer wrong. A resolved thread whose fix is missing or broken is a finding. Ticket scope comes from the linked issue and its parent epic in pr.md, hold the diff to that scope.
+Current state rules: issue state and ERD text go stale. For every ticket the ERD or epic names, establish what is really on origin/main in all three repos: find its merged PR or commits (git -C ../<repo> log origin/main --grep, gh pr list --state merged, read-only), read the code that landed, and compare it with what the ERD scoped for that ticket. Record each divergence: renamed or reshaped contracts, fields, routes, constants, flags, behavior dropped or added, work moved to another ticket. Landed code is the truth. Judge this change against what main has, not the stale ticket scope, and flag anything in it that still plans around the stale version. A ticket closed with nothing on main, or open with code on main, is a divergence too.
+Priorities, in order:
+1. Match established conventions. Use git log/blame by authors Packetouille and mdibbern1 to learn house patterns and hold this diff to them.
+2. No slippage: every changed component/service/hook must match its siblings. Hunt for existing query cache invalidations, sockets, constants, utils, validators that siblings use and this change missed.
+3. Context-specific analysis for $CTX. If web or mobile: locate the same feature in the other client repo and compare. Platform differences are fine. Divergence in established flows is not: users convert from web to app, so flow structure, naming, query keys, invalidations, state shape, and error handling must mirror the other client. Flag any divergence that is not platform-required, and state which implementation is preferred and why.
+House syntax rules (mdibbern1), each violation the diff adds is a Minor finding even though generic style is not: braces on every if / else / loop / arrow body with one statement per line, never 'if (x) return;' or '{ a; return; }' on one line. Any condition with 3+ predicates (&& / ||) is hoisted into a descriptively named const near the top of the function before the if. Effects are always useEffect(() => { ... }, [deps]), never useEffect(namedFn, deps). Multi-field destructuring wraps one property per line. A flag that render reads is state, not a ref.
+Read-only. Never modify code, never touch git state, never touch GitHub."
+# docs-only: the rules ride in $CONTEXT so every stage gets them, synthesis and comments included
+[[ -n "$DOCS" ]] && CONTEXT="$CONTEXT
+DOCS-ONLY DIFF. The changed files are documents (ERDs, design docs), not code. Skip /code-review, its lenses, and its phase numbers. Review the document as a design that tickets get built from: a wrong claim becomes a wrong ticket. Read every changed document in full at HEAD, not only the changed hunks. Hold findings to what this diff added or changed, plus unchanged text the change now contradicts. Apply the priorities above to the design the document describes. Five passes:
+1. Claims. List every claim the document makes about the current system: files, functions, routes, tables, columns, constants, flags, env vars, query keys, socket events, jobs, flows, and behavior, in this repo and the sibling repos. Open the code and prove each one TRUE or FALSE with file:line. In a sibling repo check origin/main (git -C ../<repo> show or grep against origin/main), its working tree may sit on another branch. A claim you could not check is UNVERIFIED, never assumed true.
+2. Side effects. For every change the document proposes, trace the blast radius in all three repos: callers, consumers, caches and invalidations, sockets, jobs, migrations and the rows already in the table, analytics and pixel fanout, admin panel, permissions, money and concurrency paths, and the state when only part of it has shipped. Name every effect the document does not account for.
+3. Gaps. What the document should cover and does not: failure and retry paths, empty and edge states, old mobile builds and deployed clients still calling the old contract, migration reversibility, flag and rollback, tests, questions answered by assumption, and decisions stated without the alternative that was rejected.
+4. Consistency. Contradictions inside the document, with other ERDs that cite it or cover the same area, with the linked issue, parent epic, and sibling tickets in pr.md, and with work that merged to the base after the document was written (git log on the files it names).
+5. Buildability. Could each ticket the document defines be built from it alone without guessing? Flag ambiguous contracts, unnamed fields, missing shapes, tickets that overlap, and work no ticket owns.
+Every finding cites the document path:line and the code file:line that proves it. Rank by what it costs if built as written."
+
+# Stage-1 claude command for one model. Deep sweeps get $EFFORT, light passes low.
+cc() { echo "claude -p --dangerously-skip-permissions --effort $2 --output-format stream-json --verbose --append-system-prompt-file $MODE --model $1"; }
+# deep = /code-review, the exhaustive lens/round subagent fanout.
+# light = cheap single-pass scoped lenses. The synthesis agent re-verifies everything
+# anyway, so paying for two exhaustive passes is only worth it when SWEEP=both.
+LENS_RULE=${LENSES:+"Run only these lens groups: $LENSES. List every other group under Not checked, do not run them."}
+DEEP_PROMPT="/code-review${PR:+ $PR}
+Run every subagent in the foreground and wait for all of them to finish before you answer. Never start an agent in the background. Your final message must be the complete review itself, not a status update.
+Phase 4: at most $ROUNDS round(s) total, including the first.
+$LENS_RULE
+$CONTEXT"
+# codex has no slash commands in `codex exec` - inline the prompt file instead.
+CODEX_REVIEW="$HOME/.codex/prompts/code-review.md"
+[[ -s "$CODEX_REVIEW" ]] || { echo "missing $CODEX_REVIEW" >&2; exit 1; }
+CODEX_EFFORT=$EFFORT; [[ "$EFFORT" == max ]] && CODEX_EFFORT=xhigh
+LIGHT_PROMPT="Single-pass review, no subagent fanout, no /code-review skill. Read the diff and touched files yourself only. Cover exactly: correctness bugs, regressions vs base, and convention/sibling-parity drift. Skip style, docs, and simplicity lenses - other passes cover those. One round, no self-verification pass, no re-reading files twice.
+$CONTEXT"
+if [[ -n "$DOCS" ]]; then
+  DEEP_PROMPT="Document review. Fan out subagents, split by document section and by repo, each running the five passes below. Run every subagent in the foreground and wait for all of them to finish before you answer. Never start an agent in the background. Then re-trace every finding yourself and drop what does not hold, at most $ROUNDS round(s) total. Your final message must be the complete review itself, not a status update.
+$CONTEXT"
+  LIGHT_PROMPT="Document review. Single pass, no subagent fanout, one round. Run the five passes below yourself.
+$CONTEXT"
+fi
+# Run claude: stream events to $out.jsonl, final result event to $out.json, markdown to $out.md
+run() {
+  local stage=${1%.run} out="$OUT/$1"; shift
+  RA_STAGE=$stage "$@" > "$out.jsonl" 2>"$out.log"
+  # task-notification results are background-subagent wake-ups, not the review. Prefer real turns.
+  jq -c 'select(.type=="result" and .origin.kind != "task-notification")' "$out.jsonl" | tail -1 > "$out.json"
+  [[ -s "$out.json" ]] || jq -c 'select(.type=="result")' "$out.jsonl" | tail -1 > "$out.json"
+  if jq -e '.is_error' "$out.json" >/dev/null 2>&1; then
+    local sid; sid=$(jq -r .session_id "$out.json")
+    local err; err=$(jq -r .result "$out.json")
+    echo "[$out] error: $err - retrying via --resume $sid" >&2
+    claude -p --dangerously-skip-permissions --effort "$EFFORT" --output-format stream-json --verbose       --resume "$sid" "Continue the review from exactly where you left off. Do not restart. Finish it and output the final review in the same format as before."       > "$out.jsonl" 2>>"$out.log"
+    jq -c 'select(.type=="result" and .origin.kind != "task-notification")' "$out.jsonl" | tail -1 > "$out.json"
+    [[ -s "$out.json" ]] || jq -c 'select(.type=="result")' "$out.jsonl" | tail -1 > "$out.json"
+    if jq -e '.is_error' "$out.json" >/dev/null 2>&1; then
+      echo "[$out] retry also failed: $(jq -r .result "$out.json") - leaving partial output" >&2
+    fi
+  fi
+  jq -r .result "$out.json" > "$out.md"
+}
+# stage-1 files that exist for synthesis: skipped models, or synth mode with a missing file, drop out
+if [[ "$MODE_ARG" == "synth" ]]; then
+  S1=(); for m in fable opus codex; do [[ -s "$OUT/$m.md" ]] && S1+=("$m"); done
+  [[ ${#S1[@]} -gt 0 ]] || { echo "no fable/opus/codex.md in $OUT - run full review-all first" >&2; exit 1; }
+  rm -f "$OUT"/{review,comments.run}.jsonl
+else
+  rm -f "$OUT"/{fable,opus,review,comments.run}.jsonl "$OUT/codex.log"
+fi
+map || { echo "could not build map (gh pr diff $PR failed?)" >&2; exit 1; }
+pr_state || echo "warning: could not snapshot PR state, pr.md incomplete" >&2
+
+START=$SECONDS
+PROJ="$HOME/.claude/projects/$(pwd | sed 's|/|-|g')"
+# $/M input per model. out=5x, 1h cache write=2x, 5m cache write=1.25x, cache read=0.1x
+RATES='{"claude-opus-5":5,"claude-fable-5":10}'
+# Live tokens+cost for one stage, read from its session transcript (the stream-json
+# file only carries partial per-message usage). Dedupe by requestId: last event wins.
+STATS_JQ='def h: if . >= 1000000 then "\(./100000|floor/10)M" elif . >= 1000 then "\(./100|floor/10)k" else "\(.|floor)" end;
+[.[]|select(.message.usage and .requestId)] | group_by(.requestId) | map(.[-1].message)
+| map(.usage as $u | (($rates[.model] // 5)
+      * ($u.input_tokens + 5*$u.output_tokens + 0.1*$u.cache_read_input_tokens
+         + 1.25*($u.cache_creation.ephemeral_5m_input_tokens // 0)
+         + 2*($u.cache_creation.ephemeral_1h_input_tokens // 0)) / 1000000) as $c
+    | {i: ($u.input_tokens + $u.cache_creation_input_tokens + $u.cache_read_input_tokens), o: $u.output_tokens, c: $c})
+| "\($name) \((map(.i)|add//0)|h)/\((map(.o)|add//0)|h) \((map(.c)|add//0))"'
+stats() {
+  local sid t
+  sid=$(jq -r '.session_id? // empty' "$OUT/$1.jsonl" 2>/dev/null | head -1)
+  t="$PROJ/$sid.jsonl"
+  [[ -n "$sid" && -s "$t" ]] || return
+  jq -sr --argjson rates "$RATES" --arg name "$1" "$STATS_JQ" "$t" 2>/dev/null
+}
+# Live elapsed ticker, single line overwritten. Stages passed as extra args.
+tick() {
+  kill "${TICK:-}" 2>/dev/null
+  local label=$1; shift
+  local stages=("$@")
+  ( while :; do
+      line="" total=0
+      for s in "${stages[@]}"; do
+        out=$(stats "$s") || continue
+        [[ -n "$out" ]] || continue
+        total=$(awk -v a="$total" -v b="${out##* }" 'BEGIN{print a+b}')
+        line+=$(printf ' | %s $%.2f' "${out% *}" "${out##* }")
+      done
+      printf "\r%-*.*s" "$(tput cols)" "$(tput cols)" \
+        "$(printf '[%02d:%02d] %s%s | total $%.2f' $(( (SECONDS-START)/60 )) $(( (SECONDS-START)%60 )) "$label" "$line" "$total")"
+      sleep 5
+    done ) & TICK=$!
+}
+elapsed() { printf "\n[%02d:%02d] %s\n" $(( (SECONDS-START)/60 )) $(( (SECONDS-START)%60 )) "$1"; }
+
+if [[ "$MODE_ARG" != "synth" ]]; then
+tick "$(IFS=+; echo "${S1[*]}")" fable opus
+
+if [[ "$SWEEP" == fable || "$SWEEP" == both ]]; then FP="$DEEP_PROMPT"; FE=$EFFORT; else FP="$LIGHT_PROMPT"; FE=low; fi
+if [[ "$SWEEP" == opus  || "$SWEEP" == both ]]; then OP="$DEEP_PROMPT"; OE=$EFFORT; else OP="$LIGHT_PROMPT"; OE=low; fi
+echo "sweep: fable=$([[ $FP == "$DEEP_PROMPT" ]] && echo deep || echo light) opus=$([[ $OP == "$DEEP_PROMPT" ]] && echo deep || echo light) effort=$EFFORT rounds=$ROUNDS${LENSES:+ lenses=$LENSES}${SKIP:+ skip=$SKIP}${DOCS:+ docs-only: document review}"
+PIDS=()
+skip fable || { run fable $(cc fable "$FE") "$FP" & PIDS+=($!); }
+skip opus  || { run opus  $(cc opus  "$OE") "$OP" & PIDS+=($!); }
+# prompt file starts with `---` frontmatter, which clap parses as a flag - feed it via stdin.
+# not `codex exec review`: it refuses a custom prompt together with --base.
+skip codex || {
+  { if [[ -n "$DOCS" ]]; then echo "Document review. Run the five passes below yourself."; else sed '1,/^---$/d' "$CODEX_REVIEW"; fi; echo "Base ref for Phase 0 is $BASE${PR:+, PR #$PR}. Never modify code, never touch git state, never touch GitHub."; echo "$CONTEXT"; } \
+    | codex exec -s read-only -c model_reasoning_effort="$CODEX_EFFORT" -o "$OUT/codex.md" - > "$OUT/codex.log" 2>&1 & PIDS+=($!); }
+# wait on stage-1 pids only - bare `wait` would also wait on the tick ticker loop and never return
+wait "${PIDS[@]}"
+elapsed "stage 1 done"
+# orange, with the stage's own last ERROR line (codex prints its usage-limit reset time there)
+for m in "${S1[@]}"; do
+  [[ -s "$OUT/$m.md" ]] && continue
+  why=$(grep -h '^ERROR' "$OUT/$m.log" 2>/dev/null | tail -1)
+  printf '\e[38;5;208mwarning: %s produced no output%s, see %s\e[0m\n' "$m" "${why:+ - ${why#ERROR: }}" "$OUT/$m.log" >&2
+done
+S1=(); for m in fable opus codex; do [[ -s "$OUT/$m.md" ]] && S1+=("$m"); done
+[[ ${#S1[@]} -gt 0 ]] || { echo "every stage-1 model failed" >&2; exit 1; }
+else
+  echo "synth mode: reusing existing $OUT/{$(IFS=,; echo "${S1[*]}")}.md"
+fi
+
+if [[ -z "$NOSYNTH" ]]; then
+tick "synthesis" review
+S1_FILES=$(printf "$OUT/%s.md " "${S1[@]}")
+RA_STAGE=review claude -p --dangerously-skip-permissions --effort "$EFFORT" --output-format stream-json --verbose --append-system-prompt-file "$MODE" \
+  --model opus --append-system-prompt-file "$HOME/.claude/agents/pr-review-comprehensive.md" "$CONTEXT
+$(if [[ -n "$FAST" ]]; then echo "Single pass. Do not spawn subagents. Verify findings yourself, then one sweep of the diff."; else echo "Run every subagent in the foreground and wait for all of them to finish before you answer. Never start an agent in the background."; fi) Your final message must be the complete review itself, not a status update.
+${#S1[@]} independent review(s) exist at: $S1_FILES. Read all of them.
+For EVERY finding in them: trace it in code and prove it true or false. Then run your own full sweep of the diff and its blast radius per your process.${DOCS:+ The diff is documents only, so that sweep is the five document passes above, not a code review.}
+Write $OUT/review.md with these sections:
+- Context (repo, branch, base, PR, ticket, $CTX)
+${DOCS:+- Claims ledger: every claim the documents make about the current system, each tagged TRUE / FALSE / UNVERIFIED with the code file:line that settles it
+- Unaccounted side effects and gaps, per repo: what building the document as written would break or leave undecided
+}- Findings ledger: every consideration from all source files plus your own, each tagged exactly one of VALID / INVALID, and exactly one of SHOULD BE ADDRESSED / GOOD FOR FOLLOW UP / NO ACTION, with source (fable/opus/codex/self), evidence, and file:line
+- Landed vs ERD: every ticket of the epic or ERD already on origin/main, its PR or commit, what the ERD scoped, what main has, and the effect on this change. State plainly when no ERD or epic applies
+- Convention and sibling parity audit (Packetouille / mdibbern1 patterns, missed invalidations, sibling divergence)
+- Web vs mobile parity: platform-required differences (accepted) vs flow divergences (flag)
+- Merge recommendation, blockers, rubric
+Overwrite $OUT/review.md if present. It is the only file you write." > "$OUT/review.jsonl" 2>"$OUT/review.log"
+jq -c 'select(.type=="result" and .origin.kind != "task-notification")' "$OUT/review.jsonl" | tail -1 > "$OUT/review.json"
+[[ -s "$OUT/review.json" ]] || jq -c 'select(.type=="result")' "$OUT/review.jsonl" | tail -1 > "$OUT/review.json"
+elapsed "synthesis done"
+fi
+
+# --comments: turn the ledger into plain PR comments for the author. Blockers only.
+if [[ -n "$COMMENT" ]]; then
+tick "comments" comments.run
+SRC="$OUT/review.md"; [[ -s "$SRC" ]] || SRC=$(printf "$OUT/%s.md " "${S1[@]}")
+run comments.run $(cc fable high) "You are drafting a PENDING pull request review for the PR connected to this branch${PR:+ (PR #$PR)}. Pending means nothing is published: no other user sees it, no notification goes out, nothing is posted. A human opens the draft, reads every comment, edits or deletes what they want, and presses submit themselves. Your only job is to draft each comment against the exact line it belongs to so the human does not have to place them by hand. Write as if the author will read every word exactly as you wrote it, because after that click they will.
+Hard rule: these comments are never made public by you. Never submit a review, never post a comment, never call any GitHub write API, never run gh pr review, gh pr comment, or gh api with a POST/PUT/PATCH/DELETE. Only the human submits, manually, from the GitHub UI. The script stages the pending draft from your comments.json only when the human passes --stage. You read GitHub, you write two local files, nothing else.
+$CONTEXT
+Read $SRC. Write $OUT/comments.md: the drafted comments themselves, in markdown, ready to send, one PR review comment per finding that must be fixed before merge. These ship as-is to the author, so every one has to be right. Each run is a round. If comments.md already exists, keep everything in it and append this run under a new \`## Round N\` heading, N being one more than the highest Round heading already there (a new file starts with \`## Round 1\`). comments.json holds only this round.
+Include only findings that are VALID and SHOULD BE ADDRESSED (or, if reading raw reviews, Critical and Major): bugs, regressions, an existing helper or pattern this diff reimplemented instead of reusing, divergence from established house patterns, and critical logic with no test or with a test that is not load-bearing. Drop anything refuted or follow-up only.
+
+Scope first (all read-only, gh GET and GraphQL queries only, never write to GitHub):
+- $OUT/pr.md already holds the PR description, linked issue, parent epic with sibling tickets, per-commit changes, conversation, reviews, every inline thread with resolved/outdated state, and any unsubmitted draft of yours. Read it first. Use gh only to go deeper (an issue comment thread, a sibling ticket body). Record the scope this ticket owns and what the sibling tickets own.
+- Your own pending draft comments in pr.md are from a previous run. Do not duplicate them. Cover what they missed, and if one is now wrong say so in comments.md under a 'Stale draft comments' list so the human deletes it.
+- A thread marked resolved or outdated: open the code and confirm the requested change actually landed. Landed and correct: skip. Missing or broken: that is a comment, reference the thread in one line.
+- A finding that belongs to a sibling or future ticket in the epic is not a blocking comment. If it still matters here, say so in one line: 'note: this is coming in #N from the epic, so no change here, but ...'. Never ask the author to do another ticket's work.
+- A pre-existing problem the diff did not cause or worsen goes in a short 'Follow up' list at the bottom, not a comment. Exception: it is inside this ticket's stated scope, then it is a comment.
+- Something the author already explained in the PR description, or a reviewer already raised in a thread, does not get a fresh comment. Skip it, or if the explanation is wrong, reference that thread in one sentence and say why.
+
+Before writing each comment:
+- Verify it empirically. Open the file, trace the path, run the test or a quick script if that settles it. A finding you could not confirm does not go in.
+- Verify every file:line you cite. Open the file and confirm that line is the exact spot. Same for every line number quoted inside the comment text. A line that is off by one is a comment the author stops trusting.
+- Verify the fix. Trace what else calls or depends on the code. If the fix would break a sibling, a caller, or the other client, say that instead of suggesting it, or drop the fix line.
+- Ask: is this helpful? If the author reads it and nothing they would do changes, cut it.
+- Cite lines from HEAD, not from diff.patch hunk offsets. No head sha under the round heading, the header is the file:line only.
+- One comment per root cause. Several findings with one cause become one comment at the cause, with the other spots named inline. Merge like comments as much as possible.
+- Weigh the fix against the bug. Small bug with a big fix: say that, and make it a question or a follow-up, not a demand.
+- A fix follows the pattern the diff already uses consistently, not your preference. House precedent beats both.
+
+Merge hard. Before writing, group findings by the sweep that fixes them: if one edit to one function clears three findings, that is one comment at that function, and the other spots are a clause inside it. Same file, same author-sitting, same fix: one comment. Aim for 3 to 6 comments total, not 10.
+
+Format per comment. No headers, no labels, no severity words, no emojis. Blank line between comments.
+**path/to/file.ts:LINE**
+What is wrong and why it matters, one or two plain sentences. Then the fix, as a question or a short imperative. A code snippet only when it says it faster than prose. If the fix breaks tests, name which and what they need instead, one sentence.
+
+Gold standard. Match this length, tone, and shape:
+**utils/rakutenIdentifiers.js:27**
+Could we only save when there's a valid click id? Right now a bad click id with a good landing time saves the time on its own, and that's no use to us without the click it belongs to.
+
+Since each user only goes through this once, I think the COALESCE isn't needed either. The where does the write-once on its own:
+
+\`\`\`js
+if (!rakutenClickId) return;
+try {
+  await User.update(
+    { rakuten_click_id: rakutenClickId, rakuten_landed_at: rakutenLandedAt ?? null },
+    { where: { id: userId, rakuten_click_id: null } }
+  );
+}
+\`\`\`
+
+Heads up, this breaks 5 of the tests in rakutenIdentifiers.test.js, since they check the COALESCE SQL itself. The \"landing timestamp only\" one can go, and the rest just need to expect plain values. Nothing passes a transaction to this, so I'd drop that param and its test too.
+
+Notice what that comment does not do: no repro walkthrough, no line numbers quoted inside the body, no naming of commits or sibling files, no explanation of the mechanism beyond one clause. Three findings, one comment, one fix.
+
+Tone and wording:
+- Dev to dev on the same team. Everyday words, short sentences. 'Could we', 'I think', 'Heads up' are fine. No jargon that is not already in the codebase.
+- Say what breaks and why in as few words as possible. Never comment on the author, only the code.
+- Lead with the fix as a question when you already know the answer is right. Never ask a question you cannot answer yourself.
+- Order the file: user-facing bugs, then data or money, then everything else.
+- Say plainly when a problem is unlikely in prod, one clause, so the author can weigh it.
+- Critical logic gets a test ask: the specific assertion that fails now and passes after. Never write 'add tests'. A test that passes regardless of the logic it claims to cover gets one sentence saying so.
+- Convention findings name the precedent file:line once, by Packetouille or mdibbern1 where possible. No precedent: say so.
+- Wrap every code reference in backticks. No em dashes.
+- No praise, no nits, no restating the diff, no filler, no 'starting state, action, result' walkthroughs unless the bug is invisible without one.
+- Max 4 sentences of prose per comment plus an optional snippet. Over that, you are explaining, not commenting. Cut.
+
+Last pass: reread the whole file as the author. Cut anything redundant, unclear, or that would get a 'so what' reply. More than 6 comments means merge or cut, six get read, thirty get skimmed.
+Then write $OUT/comments.json: a JSON array, one object per comment, {\"path\": \"src/x.ts\", \"line\": 126, \"body\": \"...\"}, same order and same body text as comments.md minus the bold file:line header. GitHub only anchors to lines present in the diff: line must be an added or context line for that path in $OUT/diff.patch, on the new side. If the real spot is outside the diff, anchor to the nearest diff line in that file and name the real location in the body. The Follow up list goes in a final object with path and line omitted, it becomes the review summary.
+Overwrite comments.json if present, append to comments.md. They are the only files you write. You do not post anything to GitHub."
+# build the payload always, stage it on GitHub only with --stage. No `event` in the payload = PENDING, visible only to the draft's author.
+# never add `event` here: APPROVE/REQUEST_CHANGES/COMMENT would publish it. The human submits from the UI.
+if [[ -s "$OUT/comments.json" ]] && ! jq -e . "$OUT/comments.json" >/dev/null 2>&1; then
+  echo "comments.json is not valid JSON - comments.md written, nothing staged on GitHub" >&2
+elif [[ -s "$OUT/comments.json" ]]; then
+  PRN=${PR:-$(gh pr view --json number -q .number 2>/dev/null)}
+  if [[ -z "$PRN" ]]; then
+    echo "no PR for $BRANCH - comments.md written, nothing staged on GitHub"
+  else
+    NWO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+    SHA=$(gh pr view "$PRN" --json headRefOid -q .headRefOid)
+    jq -n --arg sha "$SHA" --slurpfile c "$OUT/comments.json" '
+      {commit_id: $sha,
+       body: ([$c[0][] | select(.path == null) | .body] | join("\n\n")),
+       comments: [$c[0][] | select(.path != null and .body != null) | {path, line: (.line|tonumber), side: "RIGHT", body}]}' > "$OUT/comments.payload.json"
+    if [[ -z "$STAGE" ]]; then
+      echo "comments.md and comments.payload.json written for PR #$PRN - local only, pass --stage to put them on GitHub as a pending review"
+    elif [[ $(jq '.comments|length' "$OUT/comments.payload.json") -eq 0 ]]; then
+      echo "no anchored comments in comments.json - nothing staged on GitHub"
+    elif [[ -n "$PENDING_NODE" ]]; then
+      # one pending review per user per PR: add threads to the existing draft. Still unsubmitted.
+      ok=0 fail=0
+      while IFS= read -r c; do
+        if gh api graphql -f query='mutation($rid:ID!,$path:String!,$line:Int!,$body:String!){addPullRequestReviewThread(input:{pullRequestReviewId:$rid,path:$path,line:$line,side:RIGHT,body:$body}){thread{id}}}'              -F rid="$PENDING_NODE" -F path="$(jq -r .path <<<"$c")" -F line="$(jq -r .line <<<"$c")" -F body="$(jq -r .body <<<"$c")" >/dev/null 2>>"$OUT/comments.gh.log"; then ok=$((ok+1)); else fail=$((fail+1)); fi
+      done < <(jq -c '.comments[]' "$OUT/comments.payload.json")
+      echo "added $ok comment(s) to your existing pending draft on PR #$PRN ($fail failed, see comments.gh.log) - nothing submitted, open it and press submit yourself"
+    elif gh api -X POST "repos/$NWO/pulls/$PRN/reviews" --input "$OUT/comments.payload.json" > "$OUT/comments.review.json" 2>"$OUT/comments.gh.log"; then
+      echo "pending review staged on PR #$PRN: $(jq -r .html_url "$OUT/comments.review.json") - nothing submitted, open it and press submit yourself"
+    else
+      echo "staging pending review failed (already have a pending review on #$PRN? a line not in the diff?): $(tail -1 "$OUT/comments.gh.log")" >&2
+    fi
+  fi
+fi
+elapsed "comments done"
+fi
+
+kill "${TICK:-}" 2>/dev/null
+elapsed "total"
+echo "done: $OUT/{$(IFS=,; echo "${STAGES[*]}")}.md"
+echo
+echo "tokens:"
+for f in "${STAGES[@]}"; do
+  [[ "$f" == codex ]] && continue
+  [[ "$f" == comments ]] && f=comments.run
+  [[ -s "$OUT/$f.json" ]] && jq -r --arg f "$f" '"\($f): in=\(.usage.input_tokens + .usage.cache_creation_input_tokens + .usage.cache_read_input_tokens) out=\(.usage.output_tokens) cost=$\(.total_cost_usd)"' "$OUT/$f.json"
+done
+[[ "$MODE_ARG" != "synth" ]] && ! skip codex && echo "codex: $(grep -A1 -i 'tokens used' "$OUT/codex.log" 2>/dev/null | grep -oE '[0-9,]+' | tail -1)"

@@ -18,3 +18,15 @@ Clone into `$HOME`:
 
 ```bash
 git clone <repo-url> ~
+```
+
+## Per-machine config
+
+`~/.config/hypr/hyprland.conf` ends with `source = ~/.config/hypr/local.conf`. That file is untracked and holds machine-specific lines: monitors, GPU env vars, waybar launcher, and plugin binds (e.g. split-monitor-workspaces on the desktop). Create it on each machine, at minimum:
+
+```
+monitor = , preferred, auto, 1
+exec-once = waybar
+```
+
+Package lists are per host (`.config/pkglist-{pacman,aur}-<hostname>.txt`), refreshed by `update-pkglist.timer`. Restore with `sudo pacman -S --needed - < ~/.config/pkglist-pacman-$(uname -n).txt`.

@@ -1,15 +1,15 @@
 @define-color light #dfdab7;
-@define-color purple #30004A;
+@define-color purple #18181a;
 @define-color light-purple #b084eb;
 @define-color black #161320;
 
 /* * {
-    font-family: FontAwesome, FantasqueSansMono, sans-serif;
+    font-family: FantasqueSansMono, "Font Awesome 7 Free Solid", "Font Awesome 7 Brands", sans-serif;
     font-size: 14px;
 } */
 
 * {
-  font-family: FantasqueSansMono, "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif;
+  font-family: FantasqueSansMono, "Font Awesome 7 Free Solid", "Font Awesome 7 Brands", sans-serif;
   font-weight: 900;
   font-size: 14px;
 }
@@ -120,8 +120,15 @@ button:hover {
 #custom-media,
 #custom-power,
 #custom-gamma,
+#custom-claude,
 #custom-cava,
-#custom-sysinfo,
+#custom-messages,
+#custom-share,
+#custom-vpn,
+#custom-record,
+#custom-record-pause,
+#custom-record-stop,
+#custom-ledger,
 #custom-lighting,
 #custom-notifications,
 #tray,
@@ -135,6 +142,7 @@ button:hover {
 }
 
 #clock:hover,
+#custom-power:hover,
 #battery:hover,
 #network:hover,
 #pulseaudio:hover {
@@ -223,7 +231,6 @@ tooltip .calendar.header {
 }
 
 #power-profiles-daemon {
-    padding: 0 4px;
     color: @light;
 }
 
@@ -234,18 +241,6 @@ tooltip .calendar.header {
     color: @light;
 }
 
-#custom-notifications {
-    min-width: 26px;
-    padding: 0 6px;
-}
-
-/* Group separators: faint vertical bar on the first module of each group. */
-#custom-lighting,
-#clock {
-    border-left: 1px solid rgba(223, 218, 183, 0.25);
-    padding-left: 12px;
-    margin-left: 8px;
-}
 
 /* Bar after workspace numbers on the left */
 #workspaces {
@@ -406,6 +401,22 @@ label:focus {
 	background-color: transparent;
 }
 
+#custom-pomodoro.pomo-work {
+    color: #ff7a7a;
+}
+
+#custom-pomodoro.pomo-break {
+    color: #7ad6ff;
+}
+
+#custom-pomodoro.pomo-paused {
+    color: rgba(223, 218, 183, 0.5);
+}
+
+#custom-pomodoro.pomo-idle {
+    color: rgba(223, 218, 183, 0.6);
+}
+
 #privacy {
     padding: 0;
 }
@@ -425,4 +436,191 @@ label:focus {
 
 #privacy-item.audio-out {
     background-color: #0069d4;
+}
+
+#custom-ledger.running {
+    color: #4ade80;
+}
+#custom-ledger.paused,
+#custom-ledger.idle {
+    color: #808080;
+}
+
+#custom-record.recording,
+#custom-record-stop.recording,
+#custom-record-pause.recording {
+    color: #f53c3c;
+}
+#custom-record.paused,
+#custom-record-stop.paused,
+#custom-record-pause.paused {
+    color: #e99c29;
+}
+#custom-record-pause,
+#custom-record-stop {
+    padding: 0 3px;
+    font-size: 11px;
+}
+
+/* Record dropdown: 2-column grid of buttons with headers */
+menuitem.header {
+    padding: 4px 12px;
+}
+menuitem.header.video:disabled label {
+    color: #f53c3c;
+}
+menuitem.header.gif:disabled label {
+    color: #4ade80;
+}
+/* Tools dropdown: bold colored section labels; RECORD gets a gap above to split it from share. */
+menuitem.header.section:disabled label {
+    font-family: "FantasqueSansMono", monospace;
+    font-weight: bold;
+    letter-spacing: 6px;
+    padding-left: 6px; /* GTK adds spacing after the last letter too; this keeps the word centered */
+}
+menuitem.header.section.share:disabled label {
+    color: #c084fc;
+}
+menuitem.header.section.record:disabled label {
+    color: #f0932b;
+}
+menuitem.header.section.record {
+    margin-top: 10px;
+}
+/* Dropdown dividers: the theme draws nothing for menu separators, so give them a faint line. */
+menu separator {
+    min-height: 1px;
+    background-color: rgba(223, 218, 183, 0.18);
+    margin: 4px 10px;
+}
+menuitem.header.phone:disabled label {
+    color: #60a5fa;
+}
+menuitem.header.pc:disabled label {
+    color: #c084fc;
+}
+menuitem.last {
+    font-size: 11px;
+    padding: 4px 12px;
+    color: rgba(223, 218, 183, 0.7);
+}
+menuitem.last:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+menuitem.clip {
+    padding-left: 24px;
+}
+menuitem.clip check {
+    min-width: 10px;
+    min-height: 10px;
+    margin: 0;
+}
+menuitem.clip label {
+    margin-left: 8px;
+}
+menuitem.cell {
+    margin: 2px;
+    padding: 4px 12px;
+    border-radius: 4px;
+}
+menuitem.cell:hover {
+    background: @light;
+    color: @purple;
+}
+
+#custom-claude.running {
+    color: @light-purple;
+    animation: breathe 1s steps(12) infinite alternate;
+}
+#custom-claude.ready {
+    color: #4ade80;
+}
+#custom-claude.waiting {
+    color: #f0932b;
+}
+#custom-claude.idle {
+    color: #808080;
+}
+#custom-claude.none {
+    color: rgba(223, 218, 183, 0.35);
+}
+@keyframes breathe {
+    to { opacity: 0.2; }
+}
+
+#custom-vpn.on {
+    color: @light-purple;
+}
+
+#custom-vpn.off {
+    color: rgba(223, 218, 183, 0.4);
+}
+
+/* Unread pill pulled over the messages/notifications icon's top-right; grows with 1-3 digits, text stays centered. */
+#custom-messages-badge,
+#custom-notifications-badge {
+    color: #ffffff;
+    font-family: "Adwaita Sans";
+    font-weight: bold;
+    font-size: 8px;
+    /* min-width > min-height: flat top/bottom, rounded sides even for one digit */
+    min-width: 6px;
+    min-height: 10px;
+    padding: 0 3px;
+    border-radius: 5px;
+    /* bar stretches it vertically; top+bottom margins set its 11px height. No negative margins: they make
+       GTK's first layout clip the pill to a sliver until the bar re-lays out. */
+    margin: 2px 0 11px 0;
+}
+/* Icons drop their right padding so the badge sits on their top-right corner. */
+#custom-messages,
+#custom-notifications {
+    padding-right: 0;
+}
+/* Red only when there is a count. */
+#custom-messages-badge.unread,
+#custom-notifications-badge.unread {
+    background: #f53c3c;
+}
+
+/* Right-side layout. Uniform padding gives even gaps; icon-only modules share a min width so glyph size
+   doesn't change spacing. Separators sit on the last module of each group (system | work | clock | actions |
+   tray), with 10px on both sides of the line; a hidden module (no battery on the desktop) never takes its
+   separator with it. */
+#pulseaudio,
+#custom-battery,
+#power-profiles-daemon,
+#custom-vpn,
+#custom-claude,
+#custom-ledger,
+#clock,
+#custom-record,
+#custom-record-pause,
+#custom-record-stop,
+#custom-messages,
+#custom-notifications,
+#tray,
+#custom-power {
+    padding: 0 6px;
+    margin: 0;
+    min-width: 16px;
+}
+#custom-messages,
+#custom-notifications {
+    padding-right: 0;
+}
+/* Group ends: 10px before the line (padding) and 10px after (4px margin + next module's 6px padding). */
+#power-profiles-daemon,
+#custom-ledger,
+#clock {
+    border-right: 1px solid rgba(223, 218, 183, 0.25);
+    padding-right: 10px;
+    margin-right: 4px;
+}
+/* Actions group ends in a badge whose height is set by margins, so the tray carries this line instead. */
+#tray {
+    border-left: 1px solid rgba(223, 218, 183, 0.25);
+    padding-left: 10px;
+    margin-left: 10px;
 }

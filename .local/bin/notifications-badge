@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Waybar notification badge: streams swaync's unread count (capped 999), empty (and uncolored) when zero.
+swaync-client -swb 2>/dev/null | jq --unbuffered -c '
+  (.text | tonumber? // 0) as $n
+  | {text: (if $n > 0 then ([$n, 999] | min | tostring) else "" end),
+     tooltip: .tooltip,
+     class: (if $n > 0 then "unread" else "empty" end)}'
